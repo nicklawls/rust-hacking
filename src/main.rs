@@ -1,21 +1,9 @@
 fn main() {
-    let m1 = String::from("Hello");
-    let m2 = String::from("world");
-    greet_ref(&m1, &m2);
-    println!("{} {}", m1, m2);
+    let mut vec: Vec<i32> = vec![1, 2, 3];
+    let num = &mut vec[2];
+
+    *num += 1;
+    println!("Third element is now {}", *num);
+
+    println!("Vector is now {:?}", vec);
 }
-
-fn greet_ref(g1: &String, g2: &String) {
-    println!("{} {}!", g1, g2);
-}
-
-// fn greet(g1: String, g2: String) {
-//     println!("{} {}!", g1, g2);
-// }
-
-// fn greet2(g1: String, g2: String) -> (String, String) {
-//     println!("{} {}!", g1, g2);
-//     return (g1, g2);
-// }
-
-
