@@ -40,11 +40,10 @@ enum PrintError {
 
 impl QueryFlat {
     fn to_sql(&self) -> Result<String, PrintError> {
-        if let Some(root_node) = self.storage.first() {
-            return self.to_sub_sql(root_node);
-        } else {
-            return Err(PrintError::MissingIndex(0));
-        }
+        self.storage
+            .first()
+            .ok_or_else(|| PrintError::MissingIndex(0))
+            .and_then(|root_node| self.to_sub_sql(root_node))
     }
 
     fn to_sub_sql(&self, part: &QueryPart<usize>) -> Result<String, PrintError> {
