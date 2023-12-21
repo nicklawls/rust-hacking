@@ -17,24 +17,42 @@ struct FullQuery {
     root: usize,
 }
 
+#[derive(Debug)]
+enum PrintError {
+    MissingIndex(usize),
+    ShortSubQuery,
+}
+
 impl FullQuery {
-    fn to_sql(self: &FullQuery) -> Option<String> {
+    fn to_sql(self: &FullQuery) -> Result<String, PrintError> {
         if let Some(root_node) = self.storage.get(self.root) {
-            return Some(self.to_sub_sql(root_node));
+            return self.to_sub_sql(root_node);
         } else {
-            return None;
+            return Err(PrintError::MissingIndex(self.root));
         }
     }
 
-    fn to_sub_sql(self: &FullQuery, part: &QueryPart) -> String {
+    fn to_sub_sql(self: &FullQuery, part: &QueryPart) -> Result<String, PrintError> {
         match part {
-            QueryPart::Equals { field, operand } => format!("{}={}", field, operand),
-            QueryPart::SubQuery { operator, operand } => operand
-                .iter()
-                .filter_map(|op_index| self.storage.get(*op_index))
-                .map(|subquery| format!("({})", &self.to_sub_sql(subquery) ))
-                .collect::<Vec<String>>()
-                .join(if *operator == Op::And { " AND " } else { " OR " }),
+            QueryPart::Equals { field, operand } => Ok(format!("{}={}", field, operand)),
+            QueryPart::SubQuery { operator, operand } => {
+                if operand.len() < 2 {
+                    return Err(PrintError::ShortSubQuery);
+                }
+
+                let op_str = if *operator == Op::And { "AND" } else { "OR" };
+                operand
+                    .iter()
+                    .map(|op_index| {
+                        self.storage
+                            .get(*op_index)
+                            .ok_or(PrintError::MissingIndex(*op_index))
+                            .and_then(|part| self.to_sub_sql(part))
+                            .map(|sub_query_str| format!("({})", sub_query_str))
+                    })
+                    .collect::<Result<Vec<String>, PrintError>>()
+                    .map(|sub_query_parts| sub_query_parts.join(&format!(" {} ", op_str)))
+            }
         }
     }
 }
@@ -60,4 +78,3 @@ fn main() {
 
     println!("{:?}", example.to_sql())
 }
-
