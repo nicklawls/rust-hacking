@@ -28,8 +28,8 @@ struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
 
 #[derive(Debug)]
 struct QueryFlat {
+    /** Topological ascending */
     storage: Vec<QueryPart<usize>>,
-    root: usize,
 }
 
 #[derive(Debug)]
@@ -39,15 +39,15 @@ enum PrintError {
 }
 
 impl QueryFlat {
-    fn to_sql(self: &QueryFlat) -> Result<String, PrintError> {
-        if let Some(root_node) = self.storage.get(self.root) {
+    fn to_sql(&self) -> Result<String, PrintError> {
+        if let Some(root_node) = self.storage.first() {
             return self.to_sub_sql(root_node);
         } else {
-            return Err(PrintError::MissingIndex(self.root));
+            return Err(PrintError::MissingIndex(0));
         }
     }
 
-    fn to_sub_sql(self: &QueryFlat, part: &QueryPart<usize>) -> Result<String, PrintError> {
+    fn to_sub_sql(&self, part: &QueryPart<usize>) -> Result<String, PrintError> {
         match part {
             QueryPart::Equals { field, operand } => Ok(format!("{}={}", field, operand)),
             QueryPart::SubQuery {
@@ -112,8 +112,11 @@ fn main() {
     println!("{:?}", example2);
 
     let example = QueryFlat {
-        root: 2,
         storage: Vec::from([
+            QueryPart::SubQuery {
+                op: Op::Or,
+                operand: Vec::from([1, 2]),
+            },
             QueryPart::Equals {
                 field: "a".to_string(),
                 operand: "2".to_string(),
@@ -121,10 +124,6 @@ fn main() {
             QueryPart::Equals {
                 field: "a".to_string(),
                 operand: "3".to_string(),
-            },
-            QueryPart::SubQuery {
-                op: Op::Or,
-                operand: Vec::from([0, 1]),
             },
         ]),
     };
