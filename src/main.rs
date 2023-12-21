@@ -1,19 +1,34 @@
-#[derive(Debug, PartialEq, Eq)]
+use serde::Deserialize;
+use serde_json;
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
 
 enum Op {
+    #[serde(rename(deserialize = "AND"))]
     And,
+    #[serde(rename(deserialize = "OR"))]
     Or,
 }
 
-#[derive(Debug)]
-enum QueryPart {
+#[derive(Debug, Deserialize)]
+#[serde(tag = "operator")]
+enum QueryPart<A> {
+    #[serde(rename(deserialize = "="))]
     Equals { field: String, operand: String },
-    SubQuery { operator: Op, operand: Vec<usize> },
+    #[serde(untagged)]
+    SubQuery {
+        #[serde(rename(deserialize = "operator"))]
+        op: Op,
+        operand: Vec<A>,
+    },
 }
 
+#[derive(Debug, Deserialize)]
+struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
+
 #[derive(Debug)]
-struct FullQuery {
-    storage: Vec<QueryPart>,
+struct QueryFlat {
+    storage: Vec<QueryPart<usize>>,
     root: usize,
 }
 
@@ -23,8 +38,8 @@ enum PrintError {
     ShortSubQuery,
 }
 
-impl FullQuery {
-    fn to_sql(self: &FullQuery) -> Result<String, PrintError> {
+impl QueryFlat {
+    fn to_sql(self: &QueryFlat) -> Result<String, PrintError> {
         if let Some(root_node) = self.storage.get(self.root) {
             return self.to_sub_sql(root_node);
         } else {
@@ -32,10 +47,13 @@ impl FullQuery {
         }
     }
 
-    fn to_sub_sql(self: &FullQuery, part: &QueryPart) -> Result<String, PrintError> {
+    fn to_sub_sql(self: &QueryFlat, part: &QueryPart<usize>) -> Result<String, PrintError> {
         match part {
             QueryPart::Equals { field, operand } => Ok(format!("{}={}", field, operand)),
-            QueryPart::SubQuery { operator, operand } => {
+            QueryPart::SubQuery {
+                op: operator,
+                operand,
+            } => {
                 if operand.len() < 2 {
                     return Err(PrintError::ShortSubQuery);
                 }
@@ -58,7 +76,42 @@ impl FullQuery {
 }
 
 fn main() {
-    let example = FullQuery {
+    let data = r#"
+        {
+            "operator": "OR",
+            "operand": [
+                {
+                    "operator": "AND",
+                    "operand": [
+                        {
+                            "operator": "=",
+                            "field": "a",
+                            "operand": "1"
+                        },
+                        {
+                            "operator": "=",
+                            "field": "b",
+                            "operand": "2"
+                        },
+                        {
+                            "operator": "=",
+                            "field": "c",
+                            "operand": "3"
+                        }
+                    ]
+                },
+                {
+                    "operator": "=",
+                    "field": "a",
+                    "operand": "2"
+                }
+            ]
+        }
+    "#;
+    let example2 = serde_json::from_str::<QueryBoxed>(data);
+    println!("{:?}", example2);
+
+    let example = QueryFlat {
         root: 2,
         storage: Vec::from([
             QueryPart::Equals {
@@ -70,7 +123,7 @@ fn main() {
                 operand: "3".to_string(),
             },
             QueryPart::SubQuery {
-                operator: Op::Or,
+                op: Op::Or,
                 operand: Vec::from([0, 1]),
             },
         ]),
