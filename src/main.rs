@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json;
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Clone, Copy)]
 
 enum Op {
     #[serde(rename(deserialize = "AND"))]
@@ -25,6 +25,39 @@ enum QueryPart<A> {
 
 #[derive(Debug, Deserialize)]
 struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
+
+impl QueryBoxed {
+    fn to_flat(&self) -> QueryFlat {
+        let mut traversal = vec![self];
+        let mut storage = vec![];
+
+        while let Some(next) = traversal.pop() {
+            match *(next.0) {
+                QueryPart::Equals {
+                    ref field,
+                    ref operand,
+                } => storage.push(QueryPart::Equals {
+                    field: field.clone(),
+                    operand: operand.clone(),
+                }),
+                QueryPart::SubQuery { op, ref operand } => {
+                    for x in operand {
+                        traversal.push(x);
+                    }
+                    let indices = (0..operand.len())
+                        .map(|ix| ix + 1 + storage.len())
+                        .collect();
+                    storage.push(QueryPart::SubQuery {
+                        op,
+                        operand: indices,
+                    })
+                }
+            }
+        }
+
+        return QueryFlat { storage };
+    }
+}
 
 #[derive(Debug)]
 struct QueryFlat {
@@ -60,6 +93,7 @@ impl QueryFlat {
                 let op_str = if *operator == Op::And { "AND" } else { "OR" };
                 operand
                     .iter()
+                    .rev()
                     .map(|op_index| {
                         self.storage
                             .get(*op_index)
@@ -107,25 +141,16 @@ fn main() {
             ]
         }
     "#;
-    let example2 = serde_json::from_str::<QueryBoxed>(data);
-    println!("{:?}", example2);
+    if let Ok(example2) = serde_json::from_str::<QueryBoxed>(data) {
+        let flat = example2.to_flat();
 
-    let example = QueryFlat {
-        storage: Vec::from([
-            QueryPart::SubQuery {
-                op: Op::Or,
-                operand: Vec::from([1, 2]),
-            },
-            QueryPart::Equals {
-                field: "a".to_string(),
-                operand: "2".to_string(),
-            },
-            QueryPart::Equals {
-                field: "a".to_string(),
-                operand: "3".to_string(),
-            },
-        ]),
-    };
-
-    println!("{:?}", example.to_sql())
+        let sql = flat.to_sql();
+        // because to_sql takes a reference, we can use the result from flat
+        // after. But tradeoff, we have to copy the strings over, they can't
+        // change ownership / move.
+        // Is there a way to have the QueryFlat be a guaranteed immutable "view"
+        // into the same underlying data?
+        println!("{:#?}", flat);
+        println!("{:#?}", sql);
+    }
 }
