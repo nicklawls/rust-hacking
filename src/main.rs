@@ -44,12 +44,11 @@ impl QueryBoxed {
                     for x in operand {
                         traversal.push(x);
                     }
-                    let indices = (0..operand.len())
-                        .map(|ix| ix + 1 + storage.len())
-                        .collect();
                     storage.push(QueryPart::SubQuery {
                         op,
-                        operand: indices,
+                        operand: (0..operand.len())
+                        .map(|ix| ix + 1 + storage.len())
+                        .collect(),
                     })
                 }
             }
@@ -150,6 +149,7 @@ fn main() {
         // change ownership / move.
         // Is there a way to have the QueryFlat be a guaranteed immutable "view"
         // into the same underlying data?
+        println!("{:#?}", example2);
         println!("{:#?}", flat);
         println!("{:#?}", sql);
     }
