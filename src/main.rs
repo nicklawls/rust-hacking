@@ -151,6 +151,8 @@ fn main() {
         // remember that String is a "smart pointer", copying it is a "move" rather
         // than a deep copy. So it is more like the "view" idea than I thought.
         // println!("{:#?}", example2); // this errors@!
+        // J.K. Clone is a deep copy after all. So this newer version that takes
+        // ownership 
         println!("{:#?}", flat);
         println!("{:#?}", sql);
     }
