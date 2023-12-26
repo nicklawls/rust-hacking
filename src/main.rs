@@ -27,28 +27,27 @@ enum QueryPart<A> {
 struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
 
 impl QueryBoxed {
-    fn to_flat(&self) -> QueryFlat {
+    fn to_flat(self) -> QueryFlat {
         let mut traversal = vec![self];
         let mut storage = vec![];
 
         while let Some(next) = traversal.pop() {
             match *(next.0) {
                 QueryPart::Equals {
-                    ref field,
-                    ref operand,
+                    field,
+                    operand,
                 } => storage.push(QueryPart::Equals {
-                    field: field.clone(),
-                    operand: operand.clone(),
+                    field,
+                    operand,
                 }),
-                QueryPart::SubQuery { op, ref operand } => {
-                    for x in operand {
-                        traversal.push(x);
-                    }
+                QueryPart::SubQuery { op, mut operand } => {
+                    let len = operand.len();
+                    traversal.append(&mut operand);
                     storage.push(QueryPart::SubQuery {
                         op,
-                        operand: (0..operand.len())
-                        .map(|ix| ix + 1 + storage.len())
-                        .collect(),
+                        operand: (0..len)
+                            .map(|ix| ix + 1 + storage.len())
+                            .collect(),
                     })
                 }
             }
@@ -145,11 +144,13 @@ fn main() {
 
         let sql = flat.to_sql();
         // because to_sql takes a reference, we can use the result from flat
-        // after. But tradeoff, we have to copy the strings over, they can't
+        // after. But tradeoff, we have to copy the Strings over, they can't
         // change ownership / move.
         // Is there a way to have the QueryFlat be a guaranteed immutable "view"
         // into the same underlying data?
-        println!("{:#?}", example2);
+        // remember that String is a "smart pointer", copying it is a "move" rather
+        // than a deep copy. So it is more like the "view" idea than I thought.
+        // println!("{:#?}", example2); // this errors@!
         println!("{:#?}", flat);
         println!("{:#?}", sql);
     }
