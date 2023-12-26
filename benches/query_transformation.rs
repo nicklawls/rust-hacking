@@ -35,7 +35,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         }
     "#;
 
-    c.bench_function("to_sql_ref", |b| {
+    let mut group = c.benchmark_group("Query Transformation");
+
+    group.bench_function("to_sql_ref", |b| {
         b.iter_batched(
             || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
             |val| black_box(&val).to_sql_ref(),
@@ -43,7 +45,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         )
     });
 
-    c.bench_function("to_sql", |b| {
+    group.bench_function("to_sql", |b| {
         b.iter_batched(
             || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
             |val| black_box(val).to_sql(),
