@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rustbook::{fibonacci, QueryBoxed};
+use rustbook::QueryBoxed;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let data = r#"
@@ -35,11 +35,21 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         }
     "#;
 
-    if let Ok(query) = serde_json::from_str::<QueryBoxed>(data) {
-        c.bench_function("to_sql_ref", |b| b.iter(|| black_box(&query).to_sql_ref()));
-    }
+    c.bench_function("to_sql_ref", |b| {
+        b.iter_batched(
+            || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
+            |val| black_box(&val).to_sql_ref(),
+            criterion::BatchSize::SmallInput,
+        )
+    });
 
-    c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
+    c.bench_function("to_sql", |b| {
+        b.iter_batched(
+            || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
+            |val| black_box(val).to_sql(),
+            criterion::BatchSize::SmallInput,
+        )
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

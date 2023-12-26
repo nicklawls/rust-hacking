@@ -35,6 +35,9 @@ pub enum QueryPart<A> {
 pub struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
 
 impl QueryBoxed {
+    pub fn to_sql(self) -> Result<String, PrintError> {
+        self.to_flat().to_sql()
+    }
     pub fn to_sql_ref(&self) -> Result<String, PrintError> {
         self.to_flat_ref().to_sql()
     }
