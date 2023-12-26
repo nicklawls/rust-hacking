@@ -35,6 +35,25 @@ pub enum QueryPart<A> {
 pub struct QueryBoxed(Box<QueryPart<QueryBoxed>>);
 
 impl QueryBoxed {
+    pub fn to_sql_direct_rec(&self) -> Result<String, PrintError> {
+        match *self.0 {
+            QueryPart::Equals {
+                ref field,
+                ref operand,
+            } => Ok(format!("{}={}", field, operand)),
+            QueryPart::SubQuery { op, ref operand } => {
+                if operand.len() < 2 {
+                    return Err(PrintError::ShortSubQuery);
+                }
+
+                operand
+                    .iter()
+                    .map(|subquery| subquery.to_sql_direct_rec().map(|val| format!("({})", val)))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(|val| val.join(&format!(" {} ", if op == Op::And { "AND" } else { "OR" })))
+            }
+        }
+    }
     pub fn to_sql(self) -> Result<String, PrintError> {
         self.to_flat().to_sql()
     }

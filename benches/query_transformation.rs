@@ -52,6 +52,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             criterion::BatchSize::SmallInput,
         )
     });
+
+    group.bench_function("to_sql_direct_rec", |b| {
+        b.iter_batched(
+            || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
+            |val| black_box(&val).to_sql_direct_rec(),
+            criterion::BatchSize::SmallInput,
+        )
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);
