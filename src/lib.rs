@@ -56,7 +56,7 @@ impl QueryBoxed {
     }
 
     pub fn to_sql_direct_stack(&self) -> Result<String, PrintError> {
-        let mut result = vec![];
+        let mut result = "".to_string();
 
         enum StackFrame<'a> {
             Append(String),
@@ -66,7 +66,7 @@ impl QueryBoxed {
 
         while let Some(frame) = stack.pop() {
             match frame {
-                StackFrame::Append(str) => result.push(str),
+                StackFrame::Append(str) => result.push_str(&str),
                 StackFrame::Query(QueryBoxed(next)) => match **next {
                     QueryPart::Equals {
                         ref field,
@@ -92,7 +92,7 @@ impl QueryBoxed {
                 },
             }
         }
-        return Ok(result.join(""));
+        return Ok(result);
     }
     pub fn to_sql(self) -> Result<String, PrintError> {
         self.to_flat().to_sql()
