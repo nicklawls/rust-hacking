@@ -66,7 +66,7 @@ impl QueryBoxed {
 
         while let Some(frame) = stack.pop() {
             match frame {
-                StackFrame::Append(str) => result.push(str.clone()),
+                StackFrame::Append(str) => result.push(str),
                 StackFrame::Query(QueryBoxed(next)) => match **next {
                     QueryPart::Equals {
                         ref field,
