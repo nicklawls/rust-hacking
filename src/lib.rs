@@ -54,6 +54,46 @@ impl QueryBoxed {
             }
         }
     }
+
+    pub fn to_sql_direct_stack(&self) -> Result<String, PrintError> {
+        let mut result = vec![];
+
+        enum StackFrame<'a> {
+            Append(String),
+            Query(&'a QueryBoxed),
+        }
+        let mut stack = vec![StackFrame::Query(self)];
+
+        while let Some(frame) = stack.pop() {
+            match frame {
+                StackFrame::Append(str) => result.push(str.clone()),
+                StackFrame::Query(QueryBoxed(next)) => match **next {
+                    QueryPart::Equals {
+                        ref field,
+                        ref operand,
+                    } => stack.push(StackFrame::Append(format!("{}={}", field, operand))),
+                    QueryPart::SubQuery { op, ref operand } => {
+                        if operand.len() < 2 {
+                            return Err(PrintError::ShortSubQuery);
+                        }
+
+                        for (i, subquery) in operand.iter().rev().enumerate() {
+                            stack.push(StackFrame::Append(")".to_string()));
+                            stack.push(StackFrame::Query(subquery));
+                            stack.push(StackFrame::Append("(".to_string()));
+
+                            // let sep = format!("{:#?}", *op).to_ascii_uppercase();
+                            let sep = if op == Op::And { "AND" } else { "OR" };
+                            if i != (operand.len() - 1) {
+                                stack.push(StackFrame::Append(format!(" {} ", sep)))
+                            }
+                        }
+                    }
+                },
+            }
+        }
+        return Ok(result.join(""));
+    }
     pub fn to_sql(self) -> Result<String, PrintError> {
         self.to_flat().to_sql()
     }

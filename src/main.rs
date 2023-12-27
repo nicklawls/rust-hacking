@@ -35,9 +35,7 @@ fn main() {
         }
     "#;
     if let Ok(example2) = serde_json::from_str::<QueryBoxed>(data) {
-        let flat = example2.to_flat();
-
-        let sql = flat.to_sql();
+        let stacky = example2.to_sql_direct_stack();
         // because to_sql takes a reference, we can use the result from flat
         // after. But tradeoff, we have to copy the Strings over, they can't
         // change ownership / move.
@@ -48,7 +46,7 @@ fn main() {
         // println!("{:#?}", example2); // this errors@!
         // J.K. Clone is a deep copy after all. So this newer version that takes
         // ownership 
-        println!("{:#?}", flat);
-        println!("{:#?}", sql);
+        println!("{:#?}", stacky.unwrap());
+
     }
 }

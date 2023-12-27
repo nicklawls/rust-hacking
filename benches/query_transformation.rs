@@ -60,6 +60,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             criterion::BatchSize::SmallInput,
         )
     });
+
+    group.bench_function("stack-full", |b| {
+        b.iter_batched(
+            || serde_json::from_str::<QueryBoxed>(data.clone()).unwrap(),
+            |val| black_box(&val).to_sql_direct_stack(),
+            criterion::BatchSize::SmallInput,
+        )
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);
