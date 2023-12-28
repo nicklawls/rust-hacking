@@ -1,12 +1,3 @@
-#[inline]
-pub fn fibonacci(n: u64) -> u64 {
-    match n {
-        0 => 1,
-        1 => 1,
-        n => fibonacci(n - 1) + fibonacci(n - 2),
-    }
-}
-
 use serde::Deserialize;
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Clone, Copy)]
@@ -115,8 +106,8 @@ impl QueryBoxed {
                 }),
                 QueryPart::SubQuery { op, ref operand } => {
                     let len = operand.len();
-                    for mut o in operand {
-                        traversal.push(&mut o)
+                    for o in operand {
+                        traversal.push( o)
                     }
                     storage.push(QueryPart::SubQuery {
                         op,
@@ -158,7 +149,7 @@ pub struct QueryFlat {
     storage: Vec<QueryPart<usize>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PrintError {
     MissingIndex(usize),
     ShortSubQuery,
@@ -197,6 +188,42 @@ impl QueryFlat {
                     .collect::<Result<Vec<String>, PrintError>>()
                     .map(|sub_query_parts| sub_query_parts.join(&format!(" {} ", op_str)))
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    pub fn arb_op() -> impl Strategy<Value = Op> {
+        prop_oneof![Just(Op::And), Just(Op::Or)]
+    }
+
+    pub fn arb_query() -> impl Strategy<Value = QueryBoxed> {
+        ("[a-z]+", "[a-z]+")
+            .prop_map(|(field, operand)| QueryBoxed(Box::new(QueryPart::Equals { field, operand })))
+            .prop_recursive(8, 256, 10, |inner| {
+                arb_op().prop_flat_map(move |op| {
+                    prop::collection::vec(inner.clone(), 0..10).prop_map(move |operand| {
+                        QueryBoxed(Box::new(QueryPart::SubQuery { op, operand }))
+                    })
+                })
+            })
+    }
+
+    proptest! {
+        #[test]
+        fn all_impls_match(q in arb_query()) {
+            let two = q.to_sql_ref();
+            let three = q.to_sql_direct_stack();
+            let four = q.to_sql_direct_rec();
+            let one = q.to_sql();
+
+            // assert_eq!(one, two);
+            // assert_eq!(one, three);
+            assert_eq!(two, four);
         }
     }
 }
