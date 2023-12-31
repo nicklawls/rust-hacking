@@ -221,8 +221,8 @@ mod tests {
             let four = q.to_sql_direct_rec();
             let one = q.to_sql();
 
-            // assert_eq!(one, two);
-            // assert_eq!(one, three);
+            assert_eq!(one, two);
+            assert_eq!(one, three);
             assert_eq!(two, four);
         }
     }
