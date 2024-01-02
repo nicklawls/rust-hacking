@@ -255,7 +255,7 @@ pub enum Register {
     DX,
 
     // ???
-    SB,
+    SP,
     BP,
     SI,
     DI,
@@ -270,27 +270,78 @@ where
 
     while let Some(byte_1) = iter.next() {
         let opcode = byte_1 >> 2;
-        let d = byte_1 & 0b00000010 >> 1;
-        let w = byte_1 & 0b00000001;
+        let d_bit = byte_1 & 0b00000010 >> 1;
+        let w_bit = byte_1 & 0b00000001;
 
         match opcode {
+            // MOV
             0b100010 => {
                 if let Some(byte_2) = iter.next() {
                     let mod_field = byte_2 >> 6;
                     let reg_field = byte_2 & 0b00111000 >> 3;
                     let r_m_field = byte_2 & 0b00000111;
-                    eprintln!("Opcode:{opcode:b}, d:{d:b}, r:{w:b}");
-                    result.push(Instruction::Mov(Register::AH, Register::CL))
+
+                    match mod_field {
+                        0b11 => {
+                            // register -> register
+                            let reg_register = register_encoding(reg_field, w_bit)?;
+                            let r_m_register = register_encoding(r_m_field, w_bit)?;
+                            // if d is 1, REG is the dest, meaning R/M is the source
+                            let (dst, src) = if d_bit == 0b1 {
+                                (reg_register, r_m_register)
+                            } else {
+                                (r_m_register, reg_register)
+                            };
+                            result.push(Instruction::Mov(dst, src))
+                        }
+                        _ => {
+                            eprintln!("unknown mod field in MOV")
+                        }
+                    }
                 } else {
-                    return Err("missing byte 2".to_string())
+                    return Err("missing byte 2".to_string());
                 }
-                
             }
             _ => {
                 eprintln!("unknown opcode")
-            },
+            }
         }
     }
 
     return Ok(result);
+}
+
+type Reg = Register;
+const W_0_REGISTERS: [Register; 8] = [
+    Reg::AL,
+    Reg::CL,
+    Reg::DL,
+    Reg::BL,
+    Reg::AH,
+    Reg::CH,
+    Reg::DH,
+    Reg::BH,
+];
+
+const W_1_REGISTERS: [Register; 8] = [
+    Reg::AX,
+    Reg::CX,
+    Reg::DX,
+    Reg::BX,
+    Reg::SP,
+    Reg::BP,
+    Reg::SI,
+    Reg::DI,
+];
+
+fn register_encoding(field: u8, w_bit: u8) -> Result<Register, String> {
+    let table = if w_bit == 0 {
+        W_0_REGISTERS
+    } else {
+        W_1_REGISTERS
+    };
+    return table
+        .get(field as usize)
+        .map(|x| *x)
+        .ok_or("missing register".to_string());
 }
