@@ -231,13 +231,13 @@ mod tests {
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     /** Move Destination to Source */
-    Mov(Register, Register),
+    Mov { dst: Register, src: Register },
 }
 
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Mov(dst, src) => {
+            Instruction::Mov { dst, src } => {
                 write!(f, "mov {dst},{src}")
             }
         }
@@ -309,7 +309,7 @@ where
                             } else {
                                 (r_m_register, reg_register)
                             };
-                            result.push(Instruction::Mov(dst, src))
+                            result.push(Instruction::Mov{dst, src})
                         }
                         _ => {
                             eprintln!("unknown mod field in MOV")
