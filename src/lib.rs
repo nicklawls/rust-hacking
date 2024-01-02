@@ -287,18 +287,15 @@ where
 
     while let Some(byte_1) = iter.next() {
         let opcode_4 = byte_1 >> 4;
-
-        if opcode_4 == 0b1011 {
-            let w_bit = (byte_1 & 0b00001000) >> 3;
-            let reg_field = byte_1 & 0b00000001;
-            let byte_2 = iter.next().ok_or("missing byte 2 of register->immediate")?;
-
-            continue;
-        }
-
         let opcode_6 = byte_1 >> 2;
 
         match opcode_6 {
+            _ if opcode_4 == 0b1011 => {
+                let w_bit = (byte_1 & 0b00001000) >> 3;
+                let reg_field = byte_1 & 0b00000001;
+                let byte_2 = iter.next().ok_or("missing byte 2 of reg->imm")?;
+
+            }
             // MOV
             0b100010 => {
                 let d_bit = (byte_1 & 0b00000010) >> 1;
