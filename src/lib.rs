@@ -107,7 +107,7 @@ impl QueryBoxed {
                 QueryPart::SubQuery { op, ref operand } => {
                     let len = operand.len();
                     for o in operand {
-                        traversal.push( o)
+                        traversal.push(o)
                     }
                     storage.push(QueryPart::SubQuery {
                         op,
@@ -226,4 +226,70 @@ mod tests {
             assert_eq!(two, four);
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Instruction {
+    /** Move Destination to Source */
+    Mov(Register, Register),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Register {
+    // Low byte
+    AL,
+    BL,
+    CL,
+    DL,
+
+    // High byte
+    AH,
+    BH,
+    CH,
+    DH,
+
+    // Both bytes
+    AX,
+    BX,
+    CX,
+    DX,
+
+    // ???
+    SB,
+    BP,
+    SI,
+    DI,
+}
+
+pub fn decode_instruction_stream<'a, I>(instruction_stream: I) -> Result<Vec<Instruction>, String>
+where
+    I: IntoIterator<Item = &'a u8>,
+{
+    let mut result = vec![];
+    let mut iter = instruction_stream.into_iter();
+
+    while let Some(byte_1) = iter.next() {
+        let opcode = byte_1 >> 2;
+        let d = byte_1 & 0b00000010 >> 1;
+        let w = byte_1 & 0b00000001;
+        println!("Opcode:{opcode:b}, d:{d:b}, r:{w:b}");
+
+        match opcode {
+            0b100010 => {
+                if let Some(byte_2) = iter.next() {
+                    let mod_field = byte_2 >> 6;
+                    let reg_field = byte_2 & 0b00111000 >> 3;
+                    let r_m_field = byte_2 & 0b00000111;
+                    println!("{mod_field:#b}");
+                    result.push(Instruction::Mov(Register::AH, Register::CL))
+                } else {
+                    return Err("missing byte 2".to_string())
+                }
+                
+            }
+            _ => return Err("Unknown opcode".to_string()),
+        }
+    }
+
+    return Ok(result);
 }
