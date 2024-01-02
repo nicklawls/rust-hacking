@@ -272,22 +272,23 @@ where
         let opcode = byte_1 >> 2;
         let d = byte_1 & 0b00000010 >> 1;
         let w = byte_1 & 0b00000001;
-        println!("Opcode:{opcode:b}, d:{d:b}, r:{w:b}");
-
+        
         match opcode {
             0b100010 => {
                 if let Some(byte_2) = iter.next() {
                     let mod_field = byte_2 >> 6;
                     let reg_field = byte_2 & 0b00111000 >> 3;
                     let r_m_field = byte_2 & 0b00000111;
-                    println!("{mod_field:#b}");
+                    println!("Opcode:{opcode:b}, d:{d:b}, r:{w:b}");
                     result.push(Instruction::Mov(Register::AH, Register::CL))
                 } else {
                     return Err("missing byte 2".to_string())
                 }
                 
             }
-            _ => return Err("Unknown opcode".to_string()),
+            _ => {
+                // println!("unknown opcode")
+            },
         }
     }
 
