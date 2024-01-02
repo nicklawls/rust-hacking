@@ -234,6 +234,16 @@ pub enum Instruction {
     Mov(Register, Register),
 }
 
+impl std::fmt::Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instruction::Mov(dst, src) => {
+                write!(f, "mov {dst},{src}")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Register {
     // Low byte
@@ -259,6 +269,13 @@ pub enum Register {
     BP,
     SI,
     DI,
+}
+
+impl std::fmt::Display for Register {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = format!("{self:?}").to_ascii_lowercase();
+        write!(f, "{str}")
+    }
 }
 
 pub fn decode_instruction_stream<I>(instruction_stream: I) -> Result<Vec<Instruction>, String>

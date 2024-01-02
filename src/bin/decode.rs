@@ -17,11 +17,11 @@ fn main() -> io::Result<()> {
             // too eagerly.
             .map(|x| x.expect("oops"));
 
-        // read file lines, get bytes from str, then group into u16s
-        let decoded_instruction_stream = decode_instruction_stream(instruction_stream)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-        println!("{decoded_instruction_stream:#?}");
+        for instruction in decode_instruction_stream(instruction_stream)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        {
+            println!("{instruction}");
+        }
     }
     Ok(())
 }
