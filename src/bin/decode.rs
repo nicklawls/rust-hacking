@@ -11,7 +11,7 @@ fn main() -> io::Result<()> {
     for filename in FILES {
         let fl = fs::File::open(filename)?;
         let file_len = fl.metadata()?.len();
-        println!("{}, {:#?} B", filename, file_len);
+        eprintln!("{}, {:#?} B", filename, file_len);
         let instruction_stream = io::Read::bytes(io::BufReader::new(fl));
         
 
