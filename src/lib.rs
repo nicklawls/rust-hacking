@@ -286,42 +286,49 @@ where
     let mut iter = instruction_stream.into_iter();
 
     while let Some(byte_1) = iter.next() {
-        let opcode = byte_1 >> 2;
-        let d_bit = (byte_1 & 0b00000010) >> 1;
-        let w_bit = byte_1 & 0b00000001;
-        // eprintln!("{byte_1:#010b}");
-        // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
+        let opcode_4 = byte_1 >> 4;
 
-        match opcode {
+        if opcode_4 == 0b1011 {
+            let w_bit = (byte_1 & 0b00001000) >> 3;
+            let reg_field = byte_1 & 0b00000001;
+            let byte_2 = iter.next().ok_or("missing byte 2 of register->immediate")?;
+
+            continue;
+        }
+
+        let opcode_6 = byte_1 >> 2;
+
+        match opcode_6 {
             // MOV
             0b100010 => {
-                if let Some(byte_2) = iter.next() {
-                    let mod_field = byte_2 >> 6;
-                    let reg_field = (byte_2 & 0b00111000) >> 3;
-                    let r_m_field = byte_2 & 0b00000111;
+                let d_bit = (byte_1 & 0b00000010) >> 1;
+                let w_bit = byte_1 & 0b00000001;
+                // eprintln!("{byte_1:#010b}");
+                // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
+                let byte_2 = iter.next().ok_or("missing byte 2 of reg->reg")?;
+                let mod_field = byte_2 >> 6;
+                let reg_field = (byte_2 & 0b00111000) >> 3;
+                let r_m_field = byte_2 & 0b00000111;
 
-                    match mod_field {
-                         // register -> register
-                        0b11 => {
-                            let reg_register = register_encoding(reg_field, w_bit)?;
-                            let r_m_register = register_encoding(r_m_field, w_bit)?;
-                            // if d is 1, REG is the dest, meaning R/M is the source
-                            let (dst, src) = if d_bit == 0b1 {
-                                (reg_register, r_m_register)
-                            } else {
-                                (r_m_register, reg_register)
-                            };
-                            result.push(Instruction::Mov { dst, src })
-                        }
-                        // 00: [...], 
-                        // 01: [...<u8>], 
-                        // 10: [... <u16>]
-                        _ => {
-                            eprintln!("unknown mod field in MOV")
-                        }
+                match mod_field {
+                    // register -> register
+                    0b11 => {
+                        let reg_register = register_encoding(reg_field, w_bit)?;
+                        let r_m_register = register_encoding(r_m_field, w_bit)?;
+                        // if d is 1, REG is the dest, meaning R/M is the source
+                        let (dst, src) = if d_bit == 0b1 {
+                            (reg_register, r_m_register)
+                        } else {
+                            (r_m_register, reg_register)
+                        };
+                        result.push(Instruction::Mov { dst, src })
                     }
-                } else {
-                    return Err("missing byte 2".to_string());
+                    // 00: [...],
+                    // 01: [...<u8>],
+                    // 10: [... <u16>]
+                    _ => {
+                        eprintln!("unknown mod field in MOV")
+                    }
                 }
             }
             _ => {
