@@ -301,8 +301,8 @@ where
                     let r_m_field = byte_2 & 0b00000111;
 
                     match mod_field {
+                         // register -> register
                         0b11 => {
-                            // register -> register
                             let reg_register = register_encoding(reg_field, w_bit)?;
                             let r_m_register = register_encoding(r_m_field, w_bit)?;
                             // if d is 1, REG is the dest, meaning R/M is the source
@@ -313,6 +313,9 @@ where
                             };
                             result.push(Instruction::Mov { dst, src })
                         }
+                        // 00: [...], 
+                        // 01: [...<u8>], 
+                        // 10: [... <u16>]
                         _ => {
                             eprintln!("unknown mod field in MOV")
                         }
