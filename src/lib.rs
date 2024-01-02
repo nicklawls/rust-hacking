@@ -261,9 +261,9 @@ pub enum Register {
     DI,
 }
 
-pub fn decode_instruction_stream<'a, I>(instruction_stream: I) -> Result<Vec<Instruction>, String>
+pub fn decode_instruction_stream<I>(instruction_stream: I) -> Result<Vec<Instruction>, String>
 where
-    I: IntoIterator<Item = &'a u8>,
+    I: IntoIterator<Item = u8>,
 {
     let mut result = vec![];
     let mut iter = instruction_stream.into_iter();
