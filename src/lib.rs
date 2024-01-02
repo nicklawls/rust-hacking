@@ -287,15 +287,17 @@ where
 
     while let Some(byte_1) = iter.next() {
         let opcode = byte_1 >> 2;
-        let d_bit = byte_1 & 0b00000010 >> 1;
+        let d_bit = (byte_1 & 0b00000010) >> 1;
         let w_bit = byte_1 & 0b00000001;
+        // eprintln!("{byte_1:#010b}");
+        // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
 
         match opcode {
             // MOV
             0b100010 => {
                 if let Some(byte_2) = iter.next() {
                     let mod_field = byte_2 >> 6;
-                    let reg_field = byte_2 & 0b00111000 >> 3;
+                    let reg_field = (byte_2 & 0b00111000) >> 3;
                     let r_m_field = byte_2 & 0b00000111;
 
                     match mod_field {
@@ -309,7 +311,7 @@ where
                             } else {
                                 (r_m_register, reg_register)
                             };
-                            result.push(Instruction::Mov{dst, src})
+                            result.push(Instruction::Mov { dst, src })
                         }
                         _ => {
                             eprintln!("unknown mod field in MOV")
