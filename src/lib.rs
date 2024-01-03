@@ -334,7 +334,7 @@ where
             }
             // MOV
             0b100010 => {
-                let d_bit = (byte_1 & 0b00000010) >> 1;
+                let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                 let w_bit = (byte_1 & 0b00000001) != 0;
                 // eprintln!("{byte_1:#010b}");
                 // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
@@ -351,10 +351,9 @@ where
                         let reg_register = register_encoding(reg_field, w_bit)?;
                         let r_m_register = register_encoding(r_m_field, w_bit)?;
                         // if d is 1, REG is the dest, meaning R/M is the source
-                        let (dst, src) = if d_bit == 0b1 {
-                            (reg_register, r_m_register)
-                        } else {
-                            (r_m_register, reg_register)
+                        let (dst, src) = match d_bit {
+                            true => (reg_register, r_m_register),
+                            false => (r_m_register, reg_register),
                         };
                         instructions.push(Instruction::Mov {
                             dst: Dst::Reg(dst),
