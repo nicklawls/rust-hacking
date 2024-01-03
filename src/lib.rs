@@ -324,7 +324,8 @@ where
                         let byte_3 = instruction_iter
                             .next()
                             .ok_or("missing byte 3 of reg->imm")?;
-                        let imm_16 = ((byte_2 as u16) << 8) | (byte_3 as u16);
+                        // TODO: confirm MSB is second
+                        let imm_16 = ((byte_3 as u16) << 8) | (byte_2 as u16);
                         Src::Imm16(imm_16)
                     }
                     false => Src::Imm8(byte_2),
