@@ -231,6 +231,7 @@ mod tests {
 #[derive(Debug, Clone, Copy)]
 pub enum Dst {
     Reg(Register),
+    Ea(EffectiveAddress),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -238,6 +239,7 @@ pub enum Src {
     Reg(Register),
     Imm8(u8),
     Imm16(u16),
+    Ea(EffectiveAddress),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -252,15 +254,41 @@ impl std::fmt::Display for Instruction {
             Instruction::Mov { dst, src } => {
                 let dst = match dst {
                     Dst::Reg(r) => format!("{}", r),
+                    Dst::Ea(ea) => format!("{}", ea),
                 };
                 let src = match src {
                     Src::Reg(x) => format!("{}", x),
                     Src::Imm8(x) => format!("{}", x),
                     Src::Imm16(x) => format!("{}", x),
+                    Src::Ea(ea) => format!("{}", ea),
                 };
                 write!(f, "mov {dst}, {src}")
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Displacement {
+    D8(u8),
+    D16(u16),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EffectiveAddress {
+    BxSi(Option<Displacement>),
+    BxDi(Option<Displacement>),
+    BpSi(Option<Displacement>),
+    SI(Option<Displacement>),
+    DI(Option<Displacement>),
+    DirectAddress,
+    Bp(Displacement),
+    Bx(Option<Displacement>),
+}
+
+impl std::fmt::Display for EffectiveAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#?}", self)
     }
 }
 
@@ -346,10 +374,17 @@ where
                 let reg_field = (byte_2 & 0b00111000) >> 3;
                 let r_m_field = byte_2 & 0b00000111;
 
+                let reg_register = register_encoding(reg_field, w_bit)?;
+
                 match mod_field {
+                    0b00 => {
+                        // let mod_formula = match r_m_field {
+
+                        // }
+                    }
                     // register -> register
                     0b11 => {
-                        let reg_register = register_encoding(reg_field, w_bit)?;
+                        
                         let r_m_register = register_encoding(r_m_field, w_bit)?;
                         // if d is 1, REG is the dest, meaning R/M is the source
                         let (dst, src) = match d_bit {
@@ -361,7 +396,6 @@ where
                             src: Src::Reg(src),
                         })
                     }
-                    // 00: [...],
                     // 01: [...<u8>],
                     // 10: [... <u16>]
                     _ => {
