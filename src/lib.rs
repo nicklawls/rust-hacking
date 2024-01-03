@@ -302,10 +302,10 @@ pub fn decode_instruction_stream<I>(instruction_stream: I) -> Result<Vec<Instruc
 where
     I: IntoIterator<Item = u8>,
 {
-    let mut result = vec![];
-    let mut iter = instruction_stream.into_iter();
+    let mut instructions = vec![];
+    let mut instruction_iter = instruction_stream.into_iter();
 
-    while let Some(byte_1) = iter.next() {
+    while let Some(byte_1) = instruction_iter.next() {
         let opcode_4 = byte_1 >> 4;
         let opcode_6 = byte_1 >> 2;
 
@@ -313,19 +313,23 @@ where
             _ if opcode_4 == 0b1011 => {
                 let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
                 let reg_field = byte_1 & 0b00000001;
-                let byte_2 = iter.next().ok_or("missing byte 2 of reg->imm")?;
+                let byte_2 = instruction_iter
+                    .next()
+                    .ok_or("missing byte 2 of reg->imm")?;
 
                 let dst = Dst::Reg(register_encoding(reg_field, w_bit)?);
 
                 if w_bit {
-                    let byte_3 = iter.next().ok_or("missing byte 3 of reg->imm")?;
+                    let byte_3 = instruction_iter
+                        .next()
+                        .ok_or("missing byte 3 of reg->imm")?;
                     let imm_16 = ((byte_2 as u16) << 8) | (byte_3 as u16);
-                    result.push(Instruction::Mov {
+                    instructions.push(Instruction::Mov {
                         dst,
                         src: Src::Imm16(imm_16),
                     });
                 } else {
-                    result.push(Instruction::Mov {
+                    instructions.push(Instruction::Mov {
                         dst,
                         src: Src::Imm8(byte_2),
                     })
@@ -337,7 +341,9 @@ where
                 let w_bit = (byte_1 & 0b00000001) != 0;
                 // eprintln!("{byte_1:#010b}");
                 // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
-                let byte_2 = iter.next().ok_or("missing byte 2 of reg->reg")?;
+                let byte_2 = instruction_iter
+                    .next()
+                    .ok_or("missing byte 2 of reg->reg")?;
                 let mod_field = byte_2 >> 6;
                 let reg_field = (byte_2 & 0b00111000) >> 3;
                 let r_m_field = byte_2 & 0b00000111;
@@ -353,7 +359,7 @@ where
                         } else {
                             (r_m_register, reg_register)
                         };
-                        result.push(Instruction::Mov {
+                        instructions.push(Instruction::Mov {
                             dst: Dst::Reg(dst),
                             src: Src::Reg(src),
                         })
@@ -372,7 +378,7 @@ where
         }
     }
 
-    return Ok(result);
+    return Ok(instructions);
 }
 
 type Reg = Register;
@@ -399,11 +405,7 @@ const W_1_REGISTERS: [Register; 8] = [
 ];
 
 fn register_encoding(field: u8, w_bit: bool) -> Result<Register, String> {
-    let table = if !w_bit {
-        W_0_REGISTERS
-    } else {
-        W_1_REGISTERS
-    };
+    let table = if !w_bit { W_0_REGISTERS } else { W_1_REGISTERS };
     return table
         .get(field as usize)
         .map(|x| *x)
