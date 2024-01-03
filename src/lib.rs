@@ -402,7 +402,10 @@ const W_1_REGISTERS: [Register; 8] = [
 ];
 
 fn register_encoding(field: u8, w_bit: bool) -> Result<Register, String> {
-    let table = if !w_bit { W_0_REGISTERS } else { W_1_REGISTERS };
+    let table = match w_bit {
+        true => W_1_REGISTERS,
+        false => W_0_REGISTERS,
+    };
     return table
         .get(field as usize)
         .map(|x| *x)
