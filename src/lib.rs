@@ -297,8 +297,8 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             };
             let src = match src {
                 Src::Reg(x) => pp_register(x),
-                Src::Imm8(x) => format!("{}", x),
-                Src::Imm16(x) => format!("{}", x),
+                Src::Imm8(x) => x.to_string(),
+                Src::Imm16(x) => x.to_string(),
                 Src::Ea(ea) => pp_effective_address(ea),
             };
             format!("mov {dst}, {src}")
