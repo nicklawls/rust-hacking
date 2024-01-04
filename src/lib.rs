@@ -252,17 +252,53 @@ pub fn print_asm(instruction: &Instruction) -> String {
     fn print_register(reg: &Register) -> String {
         format!("{reg:?}").to_ascii_lowercase()
     }
+
+    fn print_effective_address(ea: &EffectiveAddress) -> String {
+        fn print_displacement(displacement: &Displacement) -> String {
+            match displacement {
+                Displacement::D8(d8) => d8.to_string(),
+                Displacement::D16(d16) => d16.to_string(),
+            }
+        }
+
+        fn plus(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
+            registers
+                .iter()
+                .map(print_register)
+                .chain(displacement.map(|ref x| print_displacement(x)))
+                .collect::<Vec<_>>()
+                .join(" + ")
+        }
+
+        type R = Register;
+        type EA = EffectiveAddress;
+
+        return format!(
+            "[{}]",
+            match ea {
+                EA::BxSi(disp) => plus(vec![R::BX, R::SI], disp),
+                EA::BxDi(disp) => plus(vec![R::BX, R::DI], disp),
+                EA::BpSi(disp) => plus(vec![R::BP, R::SI], disp),
+                EA::SI(disp) => plus(vec![R::SI], disp),
+                EA::DI(disp) => plus(vec![R::DI], disp),
+                EA::DirectAddress(disp_16) => print_displacement(&Displacement::D16(*disp_16)),
+                EA::BP(some_disp) => plus(vec![R::BP], &Some(*some_disp)),
+                EA::BX(disp) => plus(vec![R::BX], disp),
+            }
+        );
+    }
+
     match instruction {
         Instruction::Mov { dst, src } => {
             let dst = match dst {
                 Dst::Reg(r) => print_register(r),
-                Dst::Ea(ea) => format!("{:#?}", ea),
+                Dst::Ea(ea) => print_effective_address(ea),
             };
             let src = match src {
                 Src::Reg(x) => print_register(x),
                 Src::Imm8(x) => format!("{}", x),
                 Src::Imm16(x) => format!("{}", x),
-                Src::Ea(ea) => format!("{:#?}", ea),
+                Src::Ea(ea) => print_effective_address(ea),
             };
             format!("mov {dst}, {src}")
         }
@@ -282,9 +318,9 @@ pub enum EffectiveAddress {
     BpSi(Option<Displacement>),
     SI(Option<Displacement>),
     DI(Option<Displacement>),
-    DirectAddress,
-    Bp(Displacement),
-    Bx(Option<Displacement>),
+    DirectAddress(u16),
+    BP(Displacement),
+    BX(Option<Displacement>),
 }
 
 #[derive(Debug, Clone, Copy)]
