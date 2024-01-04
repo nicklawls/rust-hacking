@@ -1,6 +1,5 @@
-use rustbook::decode_instruction_stream;
-use std::fs;
-use std::io;
+use rustbook::{decode_instruction_stream, print_asm};
+use std::{fs, io};
 
 const FILES: [&str; 2] = [
     "listing_0037_single_register_mov",
@@ -19,6 +18,8 @@ fn main() -> io::Result<()> {
 
         for instruction in decode_instruction_stream(instruction_stream)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .iter()
+            .map(|instruction| print_asm(instruction))
         {
             println!("{instruction}");
         }

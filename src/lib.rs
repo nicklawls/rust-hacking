@@ -248,22 +248,23 @@ pub enum Instruction {
     Mov { dst: Dst, src: Src },
 }
 
-impl std::fmt::Display for Instruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Instruction::Mov { dst, src } => {
-                let dst = match dst {
-                    Dst::Reg(r) => format!("{}", r),
-                    Dst::Ea(ea) => format!("{}", ea),
-                };
-                let src = match src {
-                    Src::Reg(x) => format!("{}", x),
-                    Src::Imm8(x) => format!("{}", x),
-                    Src::Imm16(x) => format!("{}", x),
-                    Src::Ea(ea) => format!("{}", ea),
-                };
-                write!(f, "mov {dst}, {src}")
-            }
+pub fn print_asm(instruction: &Instruction) -> String {
+    fn print_register(reg: &Register) -> String {
+        format!("{reg:?}").to_ascii_lowercase()
+    }
+    match instruction {
+        Instruction::Mov { dst, src } => {
+            let dst = match dst {
+                Dst::Reg(r) => print_register(r),
+                Dst::Ea(ea) => format!("{:#?}", ea),
+            };
+            let src = match src {
+                Src::Reg(x) => print_register(x),
+                Src::Imm8(x) => format!("{}", x),
+                Src::Imm16(x) => format!("{}", x),
+                Src::Ea(ea) => format!("{:#?}", ea),
+            };
+            format!("mov {dst}, {src}")
         }
     }
 }
@@ -284,12 +285,6 @@ pub enum EffectiveAddress {
     DirectAddress,
     Bp(Displacement),
     Bx(Option<Displacement>),
-}
-
-impl std::fmt::Display for EffectiveAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#?}", self)
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -317,13 +312,6 @@ pub enum Register {
     BP,
     SI,
     DI,
-}
-
-impl std::fmt::Display for Register {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str = format!("{self:?}").to_ascii_lowercase();
-        write!(f, "{str}")
-    }
 }
 
 pub fn decode_instruction_stream<I>(instruction_stream: I) -> Result<Vec<Instruction>, String>
@@ -384,7 +372,6 @@ where
                     }
                     // register -> register
                     0b11 => {
-                        
                         let r_m_register = register_encoding(r_m_field, w_bit)?;
                         // if d is 1, REG is the dest, meaning R/M is the source
                         let (dst, src) = match d_bit {
