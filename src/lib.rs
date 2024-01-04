@@ -228,13 +228,13 @@ mod tests {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum Dst {
     Reg(Register),
     Ea(EffectiveAddress),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum Src {
     Reg(Register),
     Imm8(u8),
@@ -242,7 +242,7 @@ pub enum Src {
     Ea(EffectiveAddress),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum Instruction {
     /** Move Destination to Source */
     Mov { dst: Dst, src: Src },
@@ -262,11 +262,11 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             }
         }
 
-        fn pp_formula(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
+        fn pp_formula(registers: Vec<Register>, displacement: Option<&Displacement>) -> String {
             registers
                 .iter()
                 .map(pp_register)
-                .chain(displacement.map(|ref x| pp_displacement(x)))
+                .chain(displacement.map(|x| pp_displacement(x)))
                 .collect::<Vec<_>>()
                 .join(" + ")
         }
@@ -274,19 +274,18 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         type R = Register;
         type EA = EffectiveAddress;
 
-        return format!(
-            "[{}]",
-            match ea {
-                EA::BxSi(disp) => pp_formula(vec![R::BX, R::SI], disp),
-                EA::BxDi(disp) => pp_formula(vec![R::BX, R::DI], disp),
-                EA::BpSi(disp) => pp_formula(vec![R::BP, R::SI], disp),
-                EA::SI(disp) => pp_formula(vec![R::SI], disp),
-                EA::DI(disp) => pp_formula(vec![R::DI], disp),
-                EA::DirectAddress(disp_16) => pp_displacement(&Displacement::D16(*disp_16)),
-                EA::BP(some_disp) => pp_formula(vec![R::BP], &Some(*some_disp)),
-                EA::BX(disp) => pp_formula(vec![R::BX], disp),
-            }
-        );
+        let formula = match ea {
+            EA::BxSi(disp) => pp_formula(vec![R::BX, R::SI], disp.as_ref()),
+            EA::BxDi(disp) => pp_formula(vec![R::BX, R::DI], disp.as_ref()),
+            EA::BpSi(disp) => pp_formula(vec![R::BP, R::SI], disp.as_ref()),
+            EA::SI(disp) => pp_formula(vec![R::SI], disp.as_ref()),
+            EA::DI(disp) => pp_formula(vec![R::DI], disp.as_ref()),
+            EA::DirectAddress(disp_16) => pp_displacement(&Displacement::D16(*disp_16)),
+            EA::BP(some_disp) => pp_formula(vec![R::BP], Some(some_disp)),
+            EA::BX(disp) => pp_formula(vec![R::BX], disp.as_ref()),
+        };
+
+        return format!("[{formula}]");
     }
 
     match instruction {
@@ -306,13 +305,13 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum Displacement {
     D8(u8),
     D16(u16),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum EffectiveAddress {
     BxSi(Option<Displacement>),
     BxDi(Option<Displacement>),
