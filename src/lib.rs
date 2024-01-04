@@ -261,7 +261,7 @@ pub fn print_asm(instruction: &Instruction) -> String {
             }
         }
 
-        fn plus(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
+        fn print_formula(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
             registers
                 .iter()
                 .map(print_register)
@@ -276,14 +276,14 @@ pub fn print_asm(instruction: &Instruction) -> String {
         return format!(
             "[{}]",
             match ea {
-                EA::BxSi(disp) => plus(vec![R::BX, R::SI], disp),
-                EA::BxDi(disp) => plus(vec![R::BX, R::DI], disp),
-                EA::BpSi(disp) => plus(vec![R::BP, R::SI], disp),
-                EA::SI(disp) => plus(vec![R::SI], disp),
-                EA::DI(disp) => plus(vec![R::DI], disp),
+                EA::BxSi(disp) => print_formula(vec![R::BX, R::SI], disp),
+                EA::BxDi(disp) => print_formula(vec![R::BX, R::DI], disp),
+                EA::BpSi(disp) => print_formula(vec![R::BP, R::SI], disp),
+                EA::SI(disp) => print_formula(vec![R::SI], disp),
+                EA::DI(disp) => print_formula(vec![R::DI], disp),
                 EA::DirectAddress(disp_16) => print_displacement(&Displacement::D16(*disp_16)),
-                EA::BP(some_disp) => plus(vec![R::BP], &Some(*some_disp)),
-                EA::BX(disp) => plus(vec![R::BX], disp),
+                EA::BP(some_disp) => print_formula(vec![R::BP], &Some(*some_disp)),
+                EA::BX(disp) => print_formula(vec![R::BX], disp),
             }
         );
     }
@@ -365,7 +365,7 @@ where
             _ if opcode_4 == 0b1011 => {
                 let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
                 let reg_field = byte_1 & 0b00000001;
-                let dst = Dst::Reg(register_encoding(reg_field, w_bit)?);
+                let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
 
                 let byte_2 = instruction_iter
                     .next()
@@ -398,7 +398,7 @@ where
                 let reg_field = (byte_2 & 0b00111000) >> 3;
                 let r_m_field = byte_2 & 0b00000111;
 
-                let reg_register = register_encoding(reg_field, w_bit)?;
+                let reg_register = decode_register(reg_field, w_bit)?;
 
                 match mod_field {
                     0b00 => {
@@ -408,7 +408,7 @@ where
                     }
                     // register -> register
                     0b11 => {
-                        let r_m_register = register_encoding(r_m_field, w_bit)?;
+                        let r_m_register = decode_register(r_m_field, w_bit)?;
                         // if d is 1, REG is the dest, meaning R/M is the source
                         let (dst, src) = match d_bit {
                             true => (reg_register, r_m_register),
@@ -458,7 +458,7 @@ const W_1_REGISTERS: [Register; 8] = [
     Reg::DI,
 ];
 
-fn register_encoding(field: u8, w_bit: bool) -> Result<Register, String> {
+fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
     let table = match w_bit {
         true => W_1_REGISTERS,
         false => W_0_REGISTERS,
