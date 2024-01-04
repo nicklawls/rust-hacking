@@ -248,24 +248,25 @@ pub enum Instruction {
     Mov { dst: Dst, src: Src },
 }
 
-pub fn print_asm(instruction: &Instruction) -> String {
-    fn print_register(reg: &Register) -> String {
+/// Pretty print instructions as ASM.
+pub fn pp_asm(instruction: &Instruction) -> String {
+    fn pp_register(reg: &Register) -> String {
         format!("{reg:?}").to_ascii_lowercase()
     }
 
-    fn print_effective_address(ea: &EffectiveAddress) -> String {
-        fn print_displacement(displacement: &Displacement) -> String {
+    fn pp_effective_address(ea: &EffectiveAddress) -> String {
+        fn pp_displacement(displacement: &Displacement) -> String {
             match displacement {
                 Displacement::D8(d8) => d8.to_string(),
                 Displacement::D16(d16) => d16.to_string(),
             }
         }
 
-        fn print_formula(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
+        fn pp_formula(registers: Vec<Register>, displacement: &Option<Displacement>) -> String {
             registers
                 .iter()
-                .map(print_register)
-                .chain(displacement.map(|ref x| print_displacement(x)))
+                .map(pp_register)
+                .chain(displacement.map(|ref x| pp_displacement(x)))
                 .collect::<Vec<_>>()
                 .join(" + ")
         }
@@ -276,14 +277,14 @@ pub fn print_asm(instruction: &Instruction) -> String {
         return format!(
             "[{}]",
             match ea {
-                EA::BxSi(disp) => print_formula(vec![R::BX, R::SI], disp),
-                EA::BxDi(disp) => print_formula(vec![R::BX, R::DI], disp),
-                EA::BpSi(disp) => print_formula(vec![R::BP, R::SI], disp),
-                EA::SI(disp) => print_formula(vec![R::SI], disp),
-                EA::DI(disp) => print_formula(vec![R::DI], disp),
-                EA::DirectAddress(disp_16) => print_displacement(&Displacement::D16(*disp_16)),
-                EA::BP(some_disp) => print_formula(vec![R::BP], &Some(*some_disp)),
-                EA::BX(disp) => print_formula(vec![R::BX], disp),
+                EA::BxSi(disp) => pp_formula(vec![R::BX, R::SI], disp),
+                EA::BxDi(disp) => pp_formula(vec![R::BX, R::DI], disp),
+                EA::BpSi(disp) => pp_formula(vec![R::BP, R::SI], disp),
+                EA::SI(disp) => pp_formula(vec![R::SI], disp),
+                EA::DI(disp) => pp_formula(vec![R::DI], disp),
+                EA::DirectAddress(disp_16) => pp_displacement(&Displacement::D16(*disp_16)),
+                EA::BP(some_disp) => pp_formula(vec![R::BP], &Some(*some_disp)),
+                EA::BX(disp) => pp_formula(vec![R::BX], disp),
             }
         );
     }
@@ -291,14 +292,14 @@ pub fn print_asm(instruction: &Instruction) -> String {
     match instruction {
         Instruction::Mov { dst, src } => {
             let dst = match dst {
-                Dst::Reg(r) => print_register(r),
-                Dst::Ea(ea) => print_effective_address(ea),
+                Dst::Reg(r) => pp_register(r),
+                Dst::Ea(ea) => pp_effective_address(ea),
             };
             let src = match src {
-                Src::Reg(x) => print_register(x),
+                Src::Reg(x) => pp_register(x),
                 Src::Imm8(x) => format!("{}", x),
                 Src::Imm16(x) => format!("{}", x),
-                Src::Ea(ea) => print_effective_address(ea),
+                Src::Ea(ea) => pp_effective_address(ea),
             };
             format!("mov {dst}, {src}")
         }
