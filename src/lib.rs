@@ -352,19 +352,21 @@ pub enum Register {
     DI,
 }
 
-pub fn decode_instruction_stream<I>(instruction_stream: I) -> Vec<Result<Instruction, String>>
+pub fn decode_instruction_stream<I>(
+    instruction_stream: I,
+) -> Result<Vec<Instruction>, (Vec<Instruction>, String)>
 where
     I: IntoIterator<Item = u8>,
 {
-    let mut instructions = vec![];
+    let mut instructions: Vec<Instruction> = vec![];
     let mut instruction_iter = instruction_stream.into_iter();
 
     while let Some(byte_1) = instruction_iter.next() {
-        // wanted a fn to return a result because trying to bind a result to the 
-        // match opcode_6 expr wasn't working right inside the while loop. was 
+        // wanted a fn to return a result because trying to bind a result to the
+        // match opcode_6 expr wasn't working right inside the while loop. was
         // it getting confused about control flow?
 
-        // closure because I'm too lazy to type out variables
+        // closure because I'm too lazy to type out parameters
         let mut decode_instruction = || {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
@@ -390,7 +392,7 @@ where
                         false => Src::Imm8(byte_2),
                     };
 
-                    return Ok(Instruction::Mov { dst, src })
+                    return Ok(Instruction::Mov { dst, src });
                 }
                 // MOV
                 0b100010 => {
@@ -432,7 +434,7 @@ where
                                 false => (Dst::Ea(r_m_address), Src::Reg(reg_register)),
                             };
 
-                            return Ok(Instruction::Mov { dst, src })
+                            return Ok(Instruction::Mov { dst, src });
                         }
                         // register -> register
                         0b11 => {
@@ -445,25 +447,24 @@ where
                             return Ok(Instruction::Mov {
                                 dst: Dst::Reg(dst),
                                 src: Src::Reg(src),
-                            })
+                            });
                         }
                         // 01: [...<u8>],
                         // 10: [... <u16>]
-                        _ => {
-                            return Err(format!("unknown field in mod: {mod_field:#b}"))
-                        }
+                        _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
                     }
                 }
-                _ => {
-                    return Err(format!("Unknown opcode: {opcode_6:#b}"))
-                }
+                _ => return Err(format!("Unknown opcode: {opcode_6:#b}")),
             }
         };
 
-        instructions.push(decode_instruction());
+        match decode_instruction() {
+            Ok(instruction) => instructions.push(instruction),
+            Err(e) => return Err((instructions, e)),
+        };
     }
 
-    return instructions;
+    return Ok(instructions);
 }
 
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
