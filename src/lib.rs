@@ -360,7 +360,12 @@ where
     let mut instruction_iter = instruction_stream.into_iter();
 
     while let Some(byte_1) = instruction_iter.next() {
-        let mut decode_instruction = |byte_1: u8| {
+        // wanted a fn to return a result because trying to bind a result to the 
+        // match opcode_6 expr wasn't working right inside the while loop. was 
+        // it getting confused about control flow?
+
+        // closure because I'm too lazy to type out variables
+        let mut decode_instruction = || {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
             match opcode_6 {
@@ -422,16 +427,14 @@ where
                                 }
                                 0b111 => Ok(EA::BX(None)),
                                 _ => Err("more than 3 bits for r_m when mod = 0b00"),
+                            }?;
+
+                            let (dst, src) = match d_bit {
+                                true => (Dst::Reg(reg_register), Src::Ea(r_m_address)),
+                                false => (Dst::Ea(r_m_address), Src::Reg(reg_register)),
                             };
 
-                            // let () = match d_bit {
-                            //     true => todo!(),
-                            //     false => todo!(),
-                            // };
-                            Ok(Instruction::Mov {
-                                dst: Dst::Reg(Register::AH),
-                                src: Src::Reg(Register::AH),
-                            })
+                            Ok(Instruction::Mov { dst, src })
                         }
                         // register -> register
                         0b11 => {
@@ -461,7 +464,7 @@ where
             }
         };
 
-        instructions.push(decode_instruction(byte_1));
+        instructions.push(decode_instruction());
     }
 
     return instructions;
