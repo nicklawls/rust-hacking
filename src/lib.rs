@@ -390,14 +390,12 @@ where
                         false => Src::Imm8(byte_2),
                     };
 
-                    Ok(Instruction::Mov { dst, src })
+                    return Ok(Instruction::Mov { dst, src })
                 }
                 // MOV
                 0b100010 => {
                     let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                     let w_bit = (byte_1 & 0b00000001) != 0;
-                    // eprintln!("{byte_1:#010b}");
-                    // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
                     let byte_2 = instruction_iter
                         .next()
                         .ok_or("missing byte 2 of reg->reg")?;
@@ -434,7 +432,7 @@ where
                                 false => (Dst::Ea(r_m_address), Src::Reg(reg_register)),
                             };
 
-                            Ok(Instruction::Mov { dst, src })
+                            return Ok(Instruction::Mov { dst, src })
                         }
                         // register -> register
                         0b11 => {
@@ -444,7 +442,7 @@ where
                                 true => (reg_register, r_m_register),
                                 false => (r_m_register, reg_register),
                             };
-                            Ok(Instruction::Mov {
+                            return Ok(Instruction::Mov {
                                 dst: Dst::Reg(dst),
                                 src: Src::Reg(src),
                             })
@@ -452,14 +450,12 @@ where
                         // 01: [...<u8>],
                         // 10: [... <u16>]
                         _ => {
-                            eprintln!("unknown mod field in MOV");
-                            Err("unknown field in mod type".to_string())
+                            return Err(format!("unknown field in mod: {mod_field:#b}"))
                         }
                     }
                 }
                 _ => {
-                    eprintln!("unknown opcode");
-                    Err("Unknoown opcode".to_string())
+                    return Err(format!("Unknown opcode: {opcode_6:#b}"))
                 }
             }
         };
