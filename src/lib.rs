@@ -257,8 +257,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     fn pp_effective_address(ea: &EffectiveAddress) -> String {
         fn pp_displacement(displacement: &Displacement) -> Option<String> {
             let num = match displacement {
-                Displacement::D8(d8) => *d8 as u16,
-                Displacement::D16(d16) => *d16,
+                Displacement::D8(disp) | Displacement::D16(disp) => *disp,
             };
 
             if num == 0 {
@@ -287,9 +286,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             EA::BpDi(disp) => pp_formula(vec![R::BP, R::DI], disp.as_ref()),
             EA::SI(disp) => pp_formula(vec![R::SI], disp.as_ref()),
             EA::DI(disp) => pp_formula(vec![R::DI], disp.as_ref()),
-            EA::DirectAddress(disp_16) => {
-                pp_displacement(&Displacement::D16(*disp_16)).unwrap_or("0".to_string())
-            }
+            EA::DirectAddress(disp_16) => disp_16.to_string(),
             EA::BP(some_disp) => pp_formula(vec![R::BP], Some(some_disp)),
             EA::BX(disp) => pp_formula(vec![R::BX], disp.as_ref()),
         };
@@ -315,9 +312,14 @@ pub fn pp_asm(instruction: &Instruction) -> String {
 }
 
 #[derive(Debug)]
+
+/// "If the displacement is only a single byte, the 8086 or 8088 automatically
+/// sign-extends this quantity to 16-bits before using the information in
+/// further address calculations"
+/// implying that displacements are kind of always signed after decoding
 pub enum Displacement {
-    D8(u8),
-    D16(u16),
+    D8(i16),
+    D16(i16),
 }
 
 #[derive(Debug)]
@@ -452,7 +454,7 @@ where
                         }
                         0b01 => {
                             let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
-                            let d = Displacement::D8(byte_3);
+                            let d = Displacement::D8(byte_3 as i8 as i16);
                             let r_m_address = match r_m_field {
                                 0b000 => Ok(EA::BxSi(Some(d))),
                                 0b001 => Ok(EA::BxDi(Some(d))),
@@ -470,7 +472,7 @@ where
                         0b10 => {
                             let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
                             let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
-                            let d = Displacement::D16(build_u16(byte_4, byte_3));
+                            let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
                             let r_m_address = match r_m_field {
                                 0b000 => Ok(EA::BxSi(Some(d))),
                                 0b001 => Ok(EA::BxDi(Some(d))),
@@ -515,7 +517,6 @@ where
 
     return Ok(instructions);
 }
-
 
 /// In this ISA, later-coming bytes are the hight bytes
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
