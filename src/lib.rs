@@ -381,7 +381,7 @@ where
             match opcode_6 {
                 _ if opcode_4 == 0b1011 => {
                     let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
-                    let reg_field = byte_1 & 0b00000001;
+                    let reg_field = byte_1 & 0b00000111;
                     let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
 
                     let byte_2 = instruction_iter
