@@ -255,18 +255,24 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     }
 
     fn pp_effective_address(ea: &EffectiveAddress) -> String {
-        fn pp_displacement(displacement: &Displacement) -> String {
-            match displacement {
-                Displacement::D8(d8) => d8.to_string(),
-                Displacement::D16(d16) => d16.to_string(),
+        fn pp_displacement(displacement: &Displacement) -> Option<String> {
+            let num = match displacement {
+                Displacement::D8(d8) => *d8 as u16,
+                Displacement::D16(d16) => *d16,
+            };
+
+            if num == 0 {
+                return None;
             }
+
+            return Some(num.to_string());
         }
 
         fn pp_formula(registers: Vec<Register>, displacement: Option<&Displacement>) -> String {
             registers
                 .iter()
                 .map(pp_register)
-                .chain(displacement.map(|x| pp_displacement(x)))
+                .chain(displacement.and_then(|x| pp_displacement(x)))
                 .collect::<Vec<_>>()
                 .join(" + ")
         }
@@ -281,7 +287,9 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             EA::BpDi(disp) => pp_formula(vec![R::BP, R::DI], disp.as_ref()),
             EA::SI(disp) => pp_formula(vec![R::SI], disp.as_ref()),
             EA::DI(disp) => pp_formula(vec![R::DI], disp.as_ref()),
-            EA::DirectAddress(disp_16) => pp_displacement(&Displacement::D16(*disp_16)),
+            EA::DirectAddress(disp_16) => {
+                pp_displacement(&Displacement::D16(*disp_16)).unwrap_or("0".to_string())
+            }
             EA::BP(some_disp) => pp_formula(vec![R::BP], Some(some_disp)),
             EA::BX(disp) => pp_formula(vec![R::BX], disp.as_ref()),
         };
