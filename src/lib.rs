@@ -393,7 +393,6 @@ where
                             let byte_3 = instruction_iter
                                 .next()
                                 .ok_or("missing byte 3 of reg->imm")?;
-                            // TODO: confirm MSB is second
                             let imm_16 = build_u16(byte_3, byte_2);
                             Src::Imm16(imm_16)
                         }
@@ -517,6 +516,8 @@ where
     return Ok(instructions);
 }
 
+
+/// In this ISA, later-coming bytes are the hight bytes
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
     ((high_byte as u16) << 8) | (low_byte as u16)
 }
