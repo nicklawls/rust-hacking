@@ -409,6 +409,18 @@ where
 
                     type EA = EffectiveAddress;
 
+                    fn build_reg_mem_instruction(
+                        register: Register,
+                        address: EffectiveAddress,
+                        d_bit: bool,
+                    ) -> Instruction {
+                        let (dst, src) = match d_bit {
+                            true => (Dst::Reg(register), Src::Ea(address)),
+                            false => (Dst::Ea(address), Src::Reg(register)),
+                        };
+                        Instruction::Mov { dst, src }
+                    }
+
                     match mod_field {
                         0b00 => {
                             let r_m_address = match r_m_field {
@@ -429,12 +441,24 @@ where
                                 _ => Err("more than 3 bits for r_m when mod = 0b00"),
                             }?;
 
-                            let (dst, src) = match d_bit {
-                                true => (Dst::Reg(reg_register), Src::Ea(r_m_address)),
-                                false => (Dst::Ea(r_m_address), Src::Reg(reg_register)),
-                            };
+                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
+                        }
+                        0b01 => {
+                            let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
+                            let d8 = Displacement::D8(byte_3);
+                            let r_m_address = match r_m_field {
+                                0b000 => Ok(EA::BxSi(Some(d8))),
+                                0b001 => Ok(EA::BxDi(Some(d8))),
+                                0b010 => Ok(EA::BpSi(Some(d8))),
+                                0b011 => Ok(EA::BpDi(Some(d8))),
+                                0b100 => Ok(EA::SI(Some(d8))),
+                                0b101 => Ok(EA::DI(Some(d8))),
+                                0b110 => Ok(EA::BP(d8)),
+                                0b111 => Ok(EA::BX(Some(d8))),
+                                _ => Err("more than 3 bits for r_m when MOD = 0b01"),
+                            }?;
 
-                            return Ok(Instruction::Mov { dst, src });
+                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
                         }
                         // register -> register
                         0b11 => {
