@@ -255,25 +255,27 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     }
 
     fn pp_effective_address(ea: &EffectiveAddress) -> String {
-        fn pp_displacement(displacement: &Displacement) -> Option<String> {
-            let num = match displacement {
-                Displacement::D8(disp) | Displacement::D16(disp) => *disp,
-            };
-
-            if num == 0 {
-                return None;
-            }
-
-            return Some(num.to_string());
-        }
-
         fn pp_formula(registers: Vec<Register>, displacement: Option<&Displacement>) -> String {
-            registers
+            let mut reg_str = registers
                 .iter()
                 .map(pp_register)
-                .chain(displacement.and_then(|x| pp_displacement(x)))
                 .collect::<Vec<_>>()
-                .join(" + ")
+                .join(" + ");
+
+            match displacement {
+                Some(Displacement::D8(disp) | Displacement::D16(disp)) => {
+                    if disp.is_positive() {
+                        reg_str.push_str(format!(" + {disp}").as_str())
+                    }
+
+                    if disp.is_negative() {
+                        reg_str.push_str(format!(" - {}", disp.abs()).as_str())
+                    }
+                }
+                None => {}
+            };
+
+            return reg_str;
         }
 
         type R = Register;
