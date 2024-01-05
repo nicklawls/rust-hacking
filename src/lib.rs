@@ -453,17 +453,35 @@ where
                         }
                         0b01 => {
                             let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
-                            let d8 = Displacement::D8(byte_3);
+                            let d = Displacement::D8(byte_3);
                             let r_m_address = match r_m_field {
-                                0b000 => Ok(EA::BxSi(Some(d8))),
-                                0b001 => Ok(EA::BxDi(Some(d8))),
-                                0b010 => Ok(EA::BpSi(Some(d8))),
-                                0b011 => Ok(EA::BpDi(Some(d8))),
-                                0b100 => Ok(EA::SI(Some(d8))),
-                                0b101 => Ok(EA::DI(Some(d8))),
-                                0b110 => Ok(EA::BP(d8)),
-                                0b111 => Ok(EA::BX(Some(d8))),
+                                0b000 => Ok(EA::BxSi(Some(d))),
+                                0b001 => Ok(EA::BxDi(Some(d))),
+                                0b010 => Ok(EA::BpSi(Some(d))),
+                                0b011 => Ok(EA::BpDi(Some(d))),
+                                0b100 => Ok(EA::SI(Some(d))),
+                                0b101 => Ok(EA::DI(Some(d))),
+                                0b110 => Ok(EA::BP(d)),
+                                0b111 => Ok(EA::BX(Some(d))),
                                 _ => Err("more than 3 bits for r_m when MOD = 0b01"),
+                            }?;
+
+                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
+                        }
+                        0b10 => {
+                            let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
+                            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
+                            let d = Displacement::D16(build_u16(byte_4, byte_3));
+                            let r_m_address = match r_m_field {
+                                0b000 => Ok(EA::BxSi(Some(d))),
+                                0b001 => Ok(EA::BxDi(Some(d))),
+                                0b010 => Ok(EA::BpSi(Some(d))),
+                                0b011 => Ok(EA::BpDi(Some(d))),
+                                0b100 => Ok(EA::SI(Some(d))),
+                                0b101 => Ok(EA::DI(Some(d))),
+                                0b110 => Ok(EA::BP(d)),
+                                0b111 => Ok(EA::BX(Some(d))),
+                                _ => Err("more than 3 bits for r_m when MOD = 0b11"),
                             }?;
 
                             return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
