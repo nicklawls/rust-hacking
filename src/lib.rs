@@ -352,7 +352,7 @@ pub enum Register {
     DI,
 }
 
-pub fn decode_instruction_stream<I>(instruction_stream: I) -> Result<Vec<Instruction>, String>
+pub fn decode_instruction_stream<I>(instruction_stream: I) -> Vec<Result<Instruction, String>>
 where
     I: IntoIterator<Item = u8>,
 {
@@ -360,102 +360,111 @@ where
     let mut instruction_iter = instruction_stream.into_iter();
 
     while let Some(byte_1) = instruction_iter.next() {
-        let opcode_4 = byte_1 >> 4;
-        let opcode_6 = byte_1 >> 2;
+        let mut decode_instruction = |byte_1: u8| {
+            let opcode_4 = byte_1 >> 4;
+            let opcode_6 = byte_1 >> 2;
+            match opcode_6 {
+                _ if opcode_4 == 0b1011 => {
+                    let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
+                    let reg_field = byte_1 & 0b00000001;
+                    let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
 
-        match opcode_6 {
-            _ if opcode_4 == 0b1011 => {
-                let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
-                let reg_field = byte_1 & 0b00000001;
-                let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
+                    let byte_2 = instruction_iter
+                        .next()
+                        .ok_or("missing byte 2 of reg->imm")?;
 
-                let byte_2 = instruction_iter
-                    .next()
-                    .ok_or("missing byte 2 of reg->imm")?;
+                    let src = match w_bit {
+                        true => {
+                            let byte_3 = instruction_iter
+                                .next()
+                                .ok_or("missing byte 3 of reg->imm")?;
+                            // TODO: confirm MSB is second
+                            let imm_16 = build_u16(byte_3, byte_2);
+                            Src::Imm16(imm_16)
+                        }
+                        false => Src::Imm8(byte_2),
+                    };
 
-                let src = match w_bit {
-                    true => {
-                        let byte_3 = instruction_iter
-                            .next()
-                            .ok_or("missing byte 3 of reg->imm")?;
-                        // TODO: confirm MSB is second
-                        let imm_16 = build_u16(byte_3, byte_2);
-                        Src::Imm16(imm_16)
-                    }
-                    false => Src::Imm8(byte_2),
-                };
+                    Ok(Instruction::Mov { dst, src })
+                }
+                // MOV
+                0b100010 => {
+                    let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
+                    let w_bit = (byte_1 & 0b00000001) != 0;
+                    // eprintln!("{byte_1:#010b}");
+                    // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
+                    let byte_2 = instruction_iter
+                        .next()
+                        .ok_or("missing byte 2 of reg->reg")?;
+                    let mod_field = byte_2 >> 6;
+                    let reg_field = (byte_2 & 0b00111000) >> 3;
+                    let r_m_field = byte_2 & 0b00000111;
 
-                instructions.push(Instruction::Mov { dst, src })
-            }
-            // MOV
-            0b100010 => {
-                let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
-                let w_bit = (byte_1 & 0b00000001) != 0;
-                // eprintln!("{byte_1:#010b}");
-                // eprintln!("{opcode:#08b} {d_bit:#b} {w_bit:#b}");
-                let byte_2 = instruction_iter
-                    .next()
-                    .ok_or("missing byte 2 of reg->reg")?;
-                let mod_field = byte_2 >> 6;
-                let reg_field = (byte_2 & 0b00111000) >> 3;
-                let r_m_field = byte_2 & 0b00000111;
+                    let reg_register = decode_register(reg_field, w_bit)?;
 
-                let reg_register = decode_register(reg_field, w_bit)?;
+                    type EA = EffectiveAddress;
 
-                type EA = EffectiveAddress;
+                    match mod_field {
+                        0b00 => {
+                            let r_m_address = match r_m_field {
+                                0b000 => Ok(EA::BxSi(None)),
+                                0b001 => Ok(EA::BxDi(None)),
+                                0b010 => Ok(EA::BpSi(None)),
+                                0b011 => Ok(EA::BpDi(None)),
+                                0b100 => Ok(EA::SI(None)),
+                                0b101 => Ok(EA::DI(None)),
+                                0b110 => {
+                                    let byte_3 =
+                                        instruction_iter.next().ok_or("special case byte 3")?;
+                                    let byte_4 =
+                                        instruction_iter.next().ok_or("special case byte 4")?;
+                                    Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+                                }
+                                0b111 => Ok(EA::BX(None)),
+                                _ => Err("more than 3 bits for r_m when mod = 0b00"),
+                            };
 
-                match mod_field {
-                    0b00 => {
-                        let r_m_address = match r_m_field {
-                            0b000 => Ok(EA::BxSi(None)),
-                            0b001 => Ok(EA::BxDi(None)),
-                            0b010 => Ok(EA::BpSi(None)),
-                            0b011 => Ok(EA::BpDi(None)),
-                            0b100 => Ok(EA::SI(None)),
-                            0b101 => Ok(EA::DI(None)),
-                            0b110 => {
-                                let byte_3 =
-                                    instruction_iter.next().ok_or("special case byte 3")?;
-                                let byte_4 =
-                                    instruction_iter.next().ok_or("special case byte 4")?;
-                                Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
-                            }
-                            0b111 => Ok(EA::BX(None)),
-                            _ => Err("more than 3 bits for r_m when mod = 0b00"),
-                        }?;
-
-                        let () =  match d_bit {
-                            true => todo!(),
-                            false => todo!(),
-                        };
-                    }
-                    // register -> register
-                    0b11 => {
-                        let r_m_register = decode_register(r_m_field, w_bit)?;
-                        // if d is 1, REG is the dest, meaning R/M is the source
-                        let (dst, src) = match d_bit {
-                            true => (reg_register, r_m_register),
-                            false => (r_m_register, reg_register),
-                        };
-                        instructions.push(Instruction::Mov {
-                            dst: Dst::Reg(dst),
-                            src: Src::Reg(src),
-                        })
-                    }
-                    // 01: [...<u8>],
-                    // 10: [... <u16>]
-                    _ => {
-                        eprintln!("unknown mod field in MOV")
+                            // let () = match d_bit {
+                            //     true => todo!(),
+                            //     false => todo!(),
+                            // };
+                            Ok(Instruction::Mov {
+                                dst: Dst::Reg(Register::AH),
+                                src: Src::Reg(Register::AH),
+                            })
+                        }
+                        // register -> register
+                        0b11 => {
+                            let r_m_register = decode_register(r_m_field, w_bit)?;
+                            // if d is 1, REG is the dest, meaning R/M is the source
+                            let (dst, src) = match d_bit {
+                                true => (reg_register, r_m_register),
+                                false => (r_m_register, reg_register),
+                            };
+                            Ok(Instruction::Mov {
+                                dst: Dst::Reg(dst),
+                                src: Src::Reg(src),
+                            })
+                        }
+                        // 01: [...<u8>],
+                        // 10: [... <u16>]
+                        _ => {
+                            eprintln!("unknown mod field in MOV");
+                            Err("unknown field in mod type".to_string())
+                        }
                     }
                 }
+                _ => {
+                    eprintln!("unknown opcode");
+                    Err("Unknoown opcode".to_string())
+                }
             }
-            _ => {
-                eprintln!("unknown opcode")
-            }
-        }
+        };
+
+        instructions.push(decode_instruction(byte_1));
     }
 
-    return Ok(instructions);
+    return instructions;
 }
 
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {

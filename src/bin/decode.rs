@@ -17,9 +17,13 @@ fn main() -> io::Result<()> {
             .map(|x| x.expect("oops"));
 
         for instruction in decode_instruction_stream(instruction_stream)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
             .iter()
-            .map(|instruction| pp_asm(instruction))
+            .map(|instruction| {
+                instruction
+                    .as_ref()
+                    .map(pp_asm)
+                    .unwrap_or_else(|e| e.to_string())
+            })
         {
             println!("{instruction}");
         }
