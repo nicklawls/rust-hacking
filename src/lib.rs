@@ -382,6 +382,7 @@ where
         let mut decode_instruction = || {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
+            let opcode_7 = byte_1 >> 1;
             match opcode_6 {
                 _ if opcode_4 == 0b1011 => {
                     let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
@@ -507,6 +508,18 @@ where
                         _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
                     }
                 }
+                _ if opcode_7 == 0b1100011 => {
+                    let w_bit = (byte_1 & 0b00000001) != 0;
+                     let byte_2 = instruction_iter
+                        .next()
+                        .ok_or("missing byte 2 of imm->reg")?;
+                    let mod_field = byte_2 >> 6;
+                    let reg_field = (byte_2 & 0b00111000) >> 3; // always 
+                    assert!(reg_field == 0);
+                    let r_m_field = byte_2 & 0b00000111;
+
+                    return Ok(3)
+                },
                 _ => return Err(format!("Unknown opcode: {opcode_6:#b}")),
             }
         };
