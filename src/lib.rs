@@ -278,6 +278,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             EA::BxSi(disp) => pp_formula(vec![R::BX, R::SI], disp.as_ref()),
             EA::BxDi(disp) => pp_formula(vec![R::BX, R::DI], disp.as_ref()),
             EA::BpSi(disp) => pp_formula(vec![R::BP, R::SI], disp.as_ref()),
+            EA::BpDi(disp) => pp_formula(vec![R::BP, R::DI], disp.as_ref()),
             EA::SI(disp) => pp_formula(vec![R::SI], disp.as_ref()),
             EA::DI(disp) => pp_formula(vec![R::DI], disp.as_ref()),
             EA::DirectAddress(disp_16) => pp_displacement(&Displacement::D16(*disp_16)),
@@ -316,6 +317,7 @@ pub enum EffectiveAddress {
     BxSi(Option<Displacement>),
     BxDi(Option<Displacement>),
     BpSi(Option<Displacement>),
+    BpDi(Option<Displacement>),
     SI(Option<Displacement>),
     DI(Option<Displacement>),
     DirectAddress(u16),
@@ -377,7 +379,7 @@ where
                             .next()
                             .ok_or("missing byte 3 of reg->imm")?;
                         // TODO: confirm MSB is second
-                        let imm_16 = ((byte_3 as u16) << 8) | (byte_2 as u16);
+                        let imm_16 = build_u16(byte_3, byte_2);
                         Src::Imm16(imm_16)
                     }
                     false => Src::Imm8(byte_2),
@@ -400,11 +402,32 @@ where
 
                 let reg_register = decode_register(reg_field, w_bit)?;
 
+                type EA = EffectiveAddress;
+
                 match mod_field {
                     0b00 => {
-                        // let mod_formula = match r_m_field {
+                        let r_m_address = match r_m_field {
+                            0b000 => Ok(EA::BxSi(None)),
+                            0b001 => Ok(EA::BxDi(None)),
+                            0b010 => Ok(EA::BpSi(None)),
+                            0b011 => Ok(EA::BpDi(None)),
+                            0b100 => Ok(EA::SI(None)),
+                            0b101 => Ok(EA::DI(None)),
+                            0b110 => {
+                                let byte_3 =
+                                    instruction_iter.next().ok_or("special case byte 3")?;
+                                let byte_4 =
+                                    instruction_iter.next().ok_or("special case byte 4")?;
+                                Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+                            }
+                            0b111 => Ok(EA::BX(None)),
+                            _ => Err("more than 3 bits for r_m when mod = 0b00"),
+                        }?;
 
-                        // }
+                        let () =  match d_bit {
+                            true => todo!(),
+                            false => todo!(),
+                        };
                     }
                     // register -> register
                     0b11 => {
@@ -433,6 +456,10 @@ where
     }
 
     return Ok(instructions);
+}
+
+fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
+    ((high_byte as u16) << 8) | (low_byte as u16)
 }
 
 type Reg = Register;
