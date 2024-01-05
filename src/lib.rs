@@ -419,78 +419,7 @@ where
 
                     let reg_register = decode_register(reg_field, w_bit)?;
 
-                    type EA = EffectiveAddress;
-
-                    fn build_reg_mem_instruction(
-                        register: Register,
-                        address: EffectiveAddress,
-                        d_bit: bool,
-                    ) -> Instruction {
-                        let (dst, src) = match d_bit {
-                            true => (Dst::Reg(register), Src::Ea(address)),
-                            false => (Dst::Ea(address), Src::Reg(register)),
-                        };
-                        Instruction::Mov { dst, src }
-                    }
-
                     match mod_field {
-                        0b00 => {
-                            let r_m_address = match r_m_field {
-                                0b000 => Ok(EA::BxSi(None)),
-                                0b001 => Ok(EA::BxDi(None)),
-                                0b010 => Ok(EA::BpSi(None)),
-                                0b011 => Ok(EA::BpDi(None)),
-                                0b100 => Ok(EA::SI(None)),
-                                0b101 => Ok(EA::DI(None)),
-                                0b110 => {
-                                    let byte_3 =
-                                        instruction_iter.next().ok_or("special case byte 3")?;
-                                    let byte_4 =
-                                        instruction_iter.next().ok_or("special case byte 4")?;
-                                    Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
-                                }
-                                0b111 => Ok(EA::BX(None)),
-                                _ => Err("more than 3 bits for r_m when mod = 0b00"),
-                            }?;
-
-                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
-                        }
-                        0b01 => {
-                            let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
-                            let d = Displacement::D8(byte_3 as i8 as i16);
-                            let r_m_address = match r_m_field {
-                                0b000 => Ok(EA::BxSi(Some(d))),
-                                0b001 => Ok(EA::BxDi(Some(d))),
-                                0b010 => Ok(EA::BpSi(Some(d))),
-                                0b011 => Ok(EA::BpDi(Some(d))),
-                                0b100 => Ok(EA::SI(Some(d))),
-                                0b101 => Ok(EA::DI(Some(d))),
-                                0b110 => Ok(EA::BP(d)),
-                                0b111 => Ok(EA::BX(Some(d))),
-                                _ => Err("more than 3 bits for r_m when MOD = 0b01"),
-                            }?;
-
-                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
-                        }
-                        0b10 => {
-                            let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
-                            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
-                            let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
-                            let r_m_address = match r_m_field {
-                                0b000 => Ok(EA::BxSi(Some(d))),
-                                0b001 => Ok(EA::BxDi(Some(d))),
-                                0b010 => Ok(EA::BpSi(Some(d))),
-                                0b011 => Ok(EA::BpDi(Some(d))),
-                                0b100 => Ok(EA::SI(Some(d))),
-                                0b101 => Ok(EA::DI(Some(d))),
-                                0b110 => Ok(EA::BP(d)),
-                                0b111 => Ok(EA::BX(Some(d))),
-                                _ => Err("more than 3 bits for r_m when MOD = 0b11"),
-                            }?;
-
-                            return Ok(build_reg_mem_instruction(reg_register, r_m_address, d_bit));
-                        }
-                        // register -> register
                         0b11 => {
                             let r_m_register = decode_register(r_m_field, w_bit)?;
                             // if d is 1, REG is the dest, meaning R/M is the source
@@ -503,23 +432,59 @@ where
                                 src: Src::Reg(src),
                             });
                         }
-                        // 01: [...<u8>],
-                        // 10: [... <u16>]
-                        _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
+
+                        _ => {
+                            let address = decode_effective_address(
+                                mod_field,
+                                r_m_field,
+                                &mut instruction_iter,
+                            )?;
+
+                            return Ok({
+                                let (dst, src) = match d_bit {
+                                    true => (Dst::Reg(reg_register), Src::Ea(address)),
+                                    false => (Dst::Ea(address), Src::Reg(reg_register)),
+                                };
+                                Instruction::Mov { dst, src }
+                            });
+                        }
                     }
                 }
                 _ if opcode_7 == 0b1100011 => {
                     let w_bit = (byte_1 & 0b00000001) != 0;
-                     let byte_2 = instruction_iter
+                    let byte_2 = instruction_iter
                         .next()
                         .ok_or("missing byte 2 of imm->reg")?;
                     let mod_field = byte_2 >> 6;
-                    let reg_field = (byte_2 & 0b00111000) >> 3; // always 
-                    assert!(reg_field == 0);
+                    let reg_field = (byte_2 & 0b00111000) >> 3; // always 000, unused
+                    if reg_field != 0 {
+                        return Err("mem->reg: reg field not 0b000".to_string());
+                    };
                     let r_m_field = byte_2 & 0b00000111;
 
-                    return Ok(3)
-                },
+                    // WARN: this must appear first! it mutates instruction_iter.
+                    let dst = Dst::Ea(decode_effective_address(
+                        mod_field,
+                        r_m_field,
+                        &mut instruction_iter,
+                    )?);
+
+                    let data_low = instruction_iter
+                        .next()
+                        .ok_or("Missing byte 3 of imm->reg")?;
+
+                    let src = match w_bit {
+                        true => {
+                            let data_high = instruction_iter
+                                .next()
+                                .ok_or("Missing byte 4 of imm->reg")?;
+                            Src::Imm16(build_u16(data_high, data_low))
+                        }
+                        false => Src::Imm8(data_low),
+                    };
+
+                    return Ok(Instruction::Mov { dst, src });
+                }
                 _ => return Err(format!("Unknown opcode: {opcode_6:#b}")),
             }
         };
@@ -531,6 +496,76 @@ where
     }
 
     return Ok(instructions);
+}
+
+fn decode_effective_address<I>(
+    mod_field: u8,
+    r_m_field: u8,
+    instruction_iter: &mut I,
+) -> Result<EffectiveAddress, String>
+where
+    I: Iterator<Item = u8>,
+{
+    type EA = EffectiveAddress;
+
+    match mod_field {
+        0b00 => {
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(None)),
+                0b001 => Ok(EA::BxDi(None)),
+                0b010 => Ok(EA::BpSi(None)),
+                0b011 => Ok(EA::BpDi(None)),
+                0b100 => Ok(EA::SI(None)),
+                0b101 => Ok(EA::DI(None)),
+                0b110 => {
+                    let byte_3 = instruction_iter.next().ok_or("special case byte 3")?;
+                    let byte_4 = instruction_iter.next().ok_or("special case byte 4")?;
+                    Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+                }
+                0b111 => Ok(EA::BX(None)),
+                _ => Err("more than 3 bits for r_m when mod = 0b00"),
+            }?;
+
+            return Ok(r_m_address);
+        }
+        0b01 => {
+            let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
+            let d = Displacement::D8(byte_3 as i8 as i16);
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(Some(d))),
+                0b001 => Ok(EA::BxDi(Some(d))),
+                0b010 => Ok(EA::BpSi(Some(d))),
+                0b011 => Ok(EA::BpDi(Some(d))),
+                0b100 => Ok(EA::SI(Some(d))),
+                0b101 => Ok(EA::DI(Some(d))),
+                0b110 => Ok(EA::BP(d)),
+                0b111 => Ok(EA::BX(Some(d))),
+                _ => Err("more than 3 bits for r_m when MOD = 0b01"),
+            }?;
+
+            return Ok(r_m_address);
+        }
+        0b10 => {
+            let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
+            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
+            let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(Some(d))),
+                0b001 => Ok(EA::BxDi(Some(d))),
+                0b010 => Ok(EA::BpSi(Some(d))),
+                0b011 => Ok(EA::BpDi(Some(d))),
+                0b100 => Ok(EA::SI(Some(d))),
+                0b101 => Ok(EA::DI(Some(d))),
+                0b110 => Ok(EA::BP(d)),
+                0b111 => Ok(EA::BX(Some(d))),
+                _ => Err("more than 3 bits for r_m when MOD = 0b11"),
+            }?;
+
+            return Ok(r_m_address);
+        }
+        // register -> register
+        _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
+    }
 }
 
 /// In this ISA, later-coming bytes are the hight bytes
