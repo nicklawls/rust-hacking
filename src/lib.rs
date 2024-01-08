@@ -237,8 +237,8 @@ pub enum Dst {
 #[derive(Debug)]
 pub enum Src {
     Reg(Register),
-    Imm8(u8),
-    Imm16(u16),
+    Imm8 { imm: u8, is_ambiguous_source: bool },
+    Imm16 { imm: u16, is_ambiguous_source: bool },
     Ea(EffectiveAddress),
 }
 
@@ -304,8 +304,22 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             };
             let src = match src {
                 Src::Reg(x) => pp_register(x),
-                Src::Imm8(x) => x.to_string(),
-                Src::Imm16(x) => x.to_string(),
+                Src::Imm8 {
+                    imm,
+                    is_ambiguous_source,
+                } => match *is_ambiguous_source {
+                    true => format!("byte {imm}"),
+                    false => imm.to_string(),
+                },
+                Src::Imm16 {
+                    imm,
+                    is_ambiguous_source,
+                } => match *is_ambiguous_source {
+                    true => {
+                        format!("word {imm}")
+                    }
+                    false => imm.to_string(),
+                },
                 Src::Ea(ea) => pp_effective_address(ea),
             };
             format!("mov {dst}, {src}")
@@ -399,9 +413,15 @@ where
                                 .next()
                                 .ok_or("missing byte 3 of reg->imm")?;
                             let imm_16 = build_u16(byte_3, byte_2);
-                            Src::Imm16(imm_16)
+                            Src::Imm16 {
+                                imm: imm_16,
+                                is_ambiguous_source: false,
+                            }
                         }
-                        false => Src::Imm8(byte_2),
+                        false => Src::Imm8 {
+                            imm: byte_2,
+                            is_ambiguous_source: false,
+                        },
                     };
 
                     return Ok(Instruction::Mov { dst, src });
@@ -478,9 +498,15 @@ where
                             let data_high = instruction_iter
                                 .next()
                                 .ok_or("Missing byte 4 of imm->reg")?;
-                            Src::Imm16(build_u16(data_high, data_low))
+                            Src::Imm16 {
+                                imm: build_u16(data_high, data_low),
+                                is_ambiguous_source: true,
+                            }
                         }
-                        false => Src::Imm8(data_low),
+                        false => Src::Imm8 {
+                            imm: data_low,
+                            is_ambiguous_source: true,
+                        },
                     };
 
                     return Ok(Instruction::Mov { dst, src });
