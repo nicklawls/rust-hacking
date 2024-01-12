@@ -260,39 +260,39 @@ where
                     .ok_or("missing byte 2 of imm->reg")?;
                 let mod_field = byte_2 >> 6;
                 let reg_field = (byte_2 & 0b00111000) >> 3; // always 000, unused
-                if reg_field != 0 {
-                    Err("mem->reg: reg field not 0b000".to_string())
-                } else {
-                    let r_m_field = byte_2 & 0b00000111;
+                if reg_field != 0b000 {
+                    return Err("mem->reg: reg field not 0b000".to_string());
+                };
 
-                    // WARN: this must appear first! it mutates instruction_iter.
-                    let dst = Dst::Ea(decode_effective_address(
-                        mod_field,
-                        r_m_field,
-                        &mut instruction_iter,
-                    )?);
+                let r_m_field = byte_2 & 0b00000111;
 
-                    let data_low = instruction_iter
+                // WARN: this must appear first! it mutates instruction_iter.
+                let dst = Dst::Ea(decode_effective_address(
+                    mod_field,
+                    r_m_field,
+                    &mut instruction_iter,
+                )?);
+
+                let data_low = instruction_iter
+                    .next()
+                    .ok_or("Missing byte 3 of imm->reg")?;
+
+                let src = if w_bit {
+                    let data_high = instruction_iter
                         .next()
-                        .ok_or("Missing byte 3 of imm->reg")?;
+                        .ok_or("Missing byte 4 of imm->reg")?;
+                    Src::Imm16 {
+                        imm: build_u16(data_high, data_low),
+                        is_ambiguous_source: true,
+                    }
+                } else {
+                    Src::Imm8 {
+                        imm: data_low,
+                        is_ambiguous_source: true,
+                    }
+                };
 
-                    let src = if w_bit {
-                        let data_high = instruction_iter
-                            .next()
-                            .ok_or("Missing byte 4 of imm->reg")?;
-                        Src::Imm16 {
-                            imm: build_u16(data_high, data_low),
-                            is_ambiguous_source: true,
-                        }
-                    } else {
-                        Src::Imm8 {
-                            imm: data_low,
-                            is_ambiguous_source: true,
-                        }
-                    };
-
-                    Ok(Instruction::Mov { dst, src })
-                }
+                Ok(Instruction::Mov { dst, src })
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
