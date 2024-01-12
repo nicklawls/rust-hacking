@@ -167,7 +167,8 @@ where
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
             let opcode_7 = byte_1 >> 1;
-            match opcode_6 {
+            // More exhaustive if/else
+            match () {
                 _ if opcode_4 == 0b1011 => {
                     let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
                     let reg_field = byte_1 & 0b00000111;
@@ -196,7 +197,7 @@ where
                     return Ok(Instruction::Mov { dst, src });
                 }
                 // MOV
-                0b100010 => {
+                _ if opcode_6 == 0b100010 => {
                     let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                     let w_bit = (byte_1 & 0b00000001) != 0;
                     let byte_2 = instruction_iter
@@ -243,7 +244,7 @@ where
                 // MOV memory/accumulator
                 // These have two 7-bit rows in the manual, but the
                 // D bit has a semantic, deciding if mem is destination
-                0b101000 => {
+                _ if opcode_6 == 0b101000 => {
                     let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                     let w_bit = (byte_1 & 0b00000001) != 0;
                     let addr_lo = instruction_iter.next().ok_or("mem/acc addr_low")?;
@@ -298,7 +299,7 @@ where
 
                     return Ok(Instruction::Mov { dst, src });
                 }
-                _ => return Err(format!("Unknown opcode: {opcode_6:#b}")),
+                _ => return Err(format!("Unknown opcode: {byte_1:#b}")),
             }
         };
 
