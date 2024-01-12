@@ -158,16 +158,21 @@ where
     let mut instruction_iter = instruction_stream.into_iter();
 
     while let Some(byte_1) = instruction_iter.next() {
-        // wanted a fn to return a result because trying to bind a result to the
-        // match opcode_6 expr wasn't working right inside the while loop. was
-        // it getting confused about control flow?
+        // Split this up int two phases for clarity and exhaustiveness
+        // 1. calculate the next instruction or error, consuming from the
+        //    iterator as needed
+        // 2. If success, accumulate in `instruction`, else return with error
+
+        // If we want to use ? to compose Results, step 1 can't be just a value
+        // binding, because ? expands errors into a `return` to the next
+        // function context. So instead, use an IIFE.
 
         // closure because I'm too lazy to type out parameters
-        let mut decode_instruction = || {
+        let next_instruction = (|| {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
             let opcode_7 = byte_1 >> 1;
-            // More exhaustive if/else
+
             if opcode_4 == 0b1011 {
                 let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
                 let reg_field = byte_1 & 0b00000111;
@@ -193,11 +198,9 @@ where
                     }
                 };
 
-                return Ok(Instruction::Mov { dst, src });
-            }
-
-            // MOV
-            if opcode_6 == 0b100010 {
+                Ok(Instruction::Mov { dst, src })
+            } else if opcode_6 == 0b100010 {
+                // various MOVs
                 let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                 let w_bit = (byte_1 & 0b00000001) != 0;
                 let byte_2 = instruction_iter
@@ -209,40 +212,34 @@ where
 
                 let reg_register = decode_register(reg_field, w_bit)?;
 
-                match mod_field {
-                    0b11 => {
-                        let r_m_register = decode_register(r_m_field, w_bit)?;
-                        // if d is 1, REG is the dest, meaning R/M is the source
-                        let (dst, src) = if d_bit {
-                            (reg_register, r_m_register)
-                        } else {
-                            (r_m_register, reg_register)
-                        };
-                        return Ok(Instruction::Mov {
-                            dst: Dst::Reg(dst),
-                            src: Src::Reg(src),
-                        });
-                    }
+                if 0b11 == mod_field {
+                    let r_m_register = decode_register(r_m_field, w_bit)?;
+                    // if d is 1, REG is the dest, meaning R/M is the source
+                    let (dst, src) = if d_bit {
+                        (reg_register, r_m_register)
+                    } else {
+                        (r_m_register, reg_register)
+                    };
+                    Ok(Instruction::Mov {
+                        dst: Dst::Reg(dst),
+                        src: Src::Reg(src),
+                    })
+                } else {
+                    let address =
+                        decode_effective_address(mod_field, r_m_field, &mut instruction_iter)?;
 
-                    _ => {
-                        let address =
-                            decode_effective_address(mod_field, r_m_field, &mut instruction_iter)?;
+                    let (dst, src) = if d_bit {
+                        (Dst::Reg(reg_register), Src::Ea(address))
+                    } else {
+                        (Dst::Ea(address), Src::Reg(reg_register))
+                    };
 
-                        let (dst, src) = if d_bit {
-                            (Dst::Reg(reg_register), Src::Ea(address))
-                        } else {
-                            (Dst::Ea(address), Src::Reg(reg_register))
-                        };
-
-                        return Ok(Instruction::Mov { dst, src });
-                    }
+                    Ok(Instruction::Mov { dst, src })
                 }
-            }
-
-            // MOV memory/accumulator
-            // These have two 7-bit rows in the manual, but the
-            // D bit has a semantic, deciding if mem is destination
-            if opcode_6 == 0b101000 {
+            } else if opcode_6 == 0b101000 {
+                // MOV memory/accumulator
+                // These have two 7-bit rows in the manual, but the
+                // D bit has a semantic, deciding if mem is destination
                 let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
                 let w_bit = (byte_1 & 0b00000001) != 0;
                 let addr_lo = instruction_iter.next().ok_or("mem/acc addr_low")?;
@@ -255,10 +252,8 @@ where
                     (Dst::Reg(reg), Src::Ea(addr))
                 };
 
-                return Ok(Instruction::Mov { dst, src });
-            }
-
-            if opcode_7 == 0b1100011 {
+                Ok(Instruction::Mov { dst, src })
+            } else if opcode_7 == 0b1100011 {
                 let w_bit = (byte_1 & 0b00000001) != 0;
                 let byte_2 = instruction_iter
                     .next()
@@ -266,43 +261,44 @@ where
                 let mod_field = byte_2 >> 6;
                 let reg_field = (byte_2 & 0b00111000) >> 3; // always 000, unused
                 if reg_field != 0 {
-                    return Err("mem->reg: reg field not 0b000".to_string());
-                };
-                let r_m_field = byte_2 & 0b00000111;
-
-                // WARN: this must appear first! it mutates instruction_iter.
-                let dst = Dst::Ea(decode_effective_address(
-                    mod_field,
-                    r_m_field,
-                    &mut instruction_iter,
-                )?);
-
-                let data_low = instruction_iter
-                    .next()
-                    .ok_or("Missing byte 3 of imm->reg")?;
-
-                let src = if w_bit {
-                    let data_high = instruction_iter
-                        .next()
-                        .ok_or("Missing byte 4 of imm->reg")?;
-                    Src::Imm16 {
-                        imm: build_u16(data_high, data_low),
-                        is_ambiguous_source: true,
-                    }
+                    Err("mem->reg: reg field not 0b000".to_string())
                 } else {
-                    Src::Imm8 {
-                        imm: data_low,
-                        is_ambiguous_source: true,
-                    }
-                };
+                    let r_m_field = byte_2 & 0b00000111;
 
-                return Ok(Instruction::Mov { dst, src });
+                    // WARN: this must appear first! it mutates instruction_iter.
+                    let dst = Dst::Ea(decode_effective_address(
+                        mod_field,
+                        r_m_field,
+                        &mut instruction_iter,
+                    )?);
+
+                    let data_low = instruction_iter
+                        .next()
+                        .ok_or("Missing byte 3 of imm->reg")?;
+
+                    let src = if w_bit {
+                        let data_high = instruction_iter
+                            .next()
+                            .ok_or("Missing byte 4 of imm->reg")?;
+                        Src::Imm16 {
+                            imm: build_u16(data_high, data_low),
+                            is_ambiguous_source: true,
+                        }
+                    } else {
+                        Src::Imm8 {
+                            imm: data_low,
+                            is_ambiguous_source: true,
+                        }
+                    };
+
+                    Ok(Instruction::Mov { dst, src })
+                }
+            } else {
+                Err(format!("Unknown opcode: {byte_1:#b}"))
             }
+        })();
 
-            Err(format!("Unknown opcode: {byte_1:#b}"))
-        };
-
-        match decode_instruction() {
+        match next_instruction {
             Ok(instruction) => instructions.push(instruction),
             Err(e) => return Err((instructions, e)),
         };
