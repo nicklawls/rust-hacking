@@ -240,6 +240,25 @@ where
                         }
                     }
                 }
+                // MOV memory/accumulator
+                // These have two 7-bit rows in the manual, but the 
+                // D bit has a semantic, deciding if mem is destination
+                0b101000 => {
+                    let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
+                    let w_bit = (byte_1 & 0b00000001) != 0;
+                    let addr_lo = instruction_iter.next().ok_or("mem/acc addr_low")?;
+                    let addr_hi = instruction_iter.next().ok_or("mem/acc addr_hi")?;
+                    let addr = EffectiveAddress::DirectAddress(build_u16(addr_hi, addr_lo));
+                    let reg = if w_bit { Reg::AX } else { Reg::AL };
+                    let (dst, src) = if d_bit {
+                        (Dst::Ea(addr), Src::Reg(reg))
+                    } else {
+                        
+                        (Dst::Reg(reg), Src::Ea(addr))
+                    };
+
+                    return Ok(Instruction::Mov { dst, src });
+                }
                 _ if opcode_7 == 0b1100011 => {
                     let w_bit = (byte_1 & 0b00000001) != 0;
                     let byte_2 = instruction_iter
