@@ -177,21 +177,20 @@ where
                         .next()
                         .ok_or("missing byte 2 of reg->imm")?;
 
-                    let src = match w_bit {
-                        true => {
-                            let byte_3 = instruction_iter
-                                .next()
-                                .ok_or("missing byte 3 of reg->imm")?;
-                            let imm_16 = build_u16(byte_3, byte_2);
-                            Src::Imm16 {
-                                imm: imm_16,
-                                is_ambiguous_source: false,
-                            }
+                    let src = if w_bit {
+                        let byte_3 = instruction_iter
+                            .next()
+                            .ok_or("missing byte 3 of reg->imm")?;
+                        let imm_16 = build_u16(byte_3, byte_2);
+                        Src::Imm16 {
+                            imm: imm_16,
+                            is_ambiguous_source: false,
                         }
-                        false => Src::Imm8 {
+                    } else {
+                        Src::Imm8 {
                             imm: byte_2,
                             is_ambiguous_source: false,
-                        },
+                        }
                     };
 
                     return Ok(Instruction::Mov { dst, src });
@@ -213,9 +212,10 @@ where
                         0b11 => {
                             let r_m_register = decode_register(r_m_field, w_bit)?;
                             // if d is 1, REG is the dest, meaning R/M is the source
-                            let (dst, src) = match d_bit {
-                                true => (reg_register, r_m_register),
-                                false => (r_m_register, reg_register),
+                            let (dst, src) = if d_bit {
+                                (reg_register, r_m_register)
+                            } else {
+                                (r_m_register, reg_register)
                             };
                             return Ok(Instruction::Mov {
                                 dst: Dst::Reg(dst),
@@ -230,18 +230,18 @@ where
                                 &mut instruction_iter,
                             )?;
 
-                            return Ok({
-                                let (dst, src) = match d_bit {
-                                    true => (Dst::Reg(reg_register), Src::Ea(address)),
-                                    false => (Dst::Ea(address), Src::Reg(reg_register)),
-                                };
-                                Instruction::Mov { dst, src }
-                            });
+                            let (dst, src) = if d_bit {
+                                (Dst::Reg(reg_register), Src::Ea(address))
+                            } else {
+                                (Dst::Ea(address), Src::Reg(reg_register))
+                            };
+
+                            return Ok(Instruction::Mov { dst, src });
                         }
                     }
                 }
                 // MOV memory/accumulator
-                // These have two 7-bit rows in the manual, but the 
+                // These have two 7-bit rows in the manual, but the
                 // D bit has a semantic, deciding if mem is destination
                 0b101000 => {
                     let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
@@ -253,7 +253,6 @@ where
                     let (dst, src) = if d_bit {
                         (Dst::Ea(addr), Src::Reg(reg))
                     } else {
-                        
                         (Dst::Reg(reg), Src::Ea(addr))
                     };
 
@@ -282,20 +281,19 @@ where
                         .next()
                         .ok_or("Missing byte 3 of imm->reg")?;
 
-                    let src = match w_bit {
-                        true => {
-                            let data_high = instruction_iter
-                                .next()
-                                .ok_or("Missing byte 4 of imm->reg")?;
-                            Src::Imm16 {
-                                imm: build_u16(data_high, data_low),
-                                is_ambiguous_source: true,
-                            }
+                    let src = if w_bit {
+                        let data_high = instruction_iter
+                            .next()
+                            .ok_or("Missing byte 4 of imm->reg")?;
+                        Src::Imm16 {
+                            imm: build_u16(data_high, data_low),
+                            is_ambiguous_source: true,
                         }
-                        false => Src::Imm8 {
+                    } else {
+                        Src::Imm8 {
                             imm: data_low,
                             is_ambiguous_source: true,
-                        },
+                        }
                     };
 
                     return Ok(Instruction::Mov { dst, src });
@@ -412,10 +410,7 @@ const W_1_REGISTERS: [Register; 8] = [
 ];
 
 fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
-    let table = match w_bit {
-        true => W_1_REGISTERS,
-        false => W_0_REGISTERS,
-    };
+    let table = if w_bit { W_1_REGISTERS } else { W_0_REGISTERS };
     return table
         .get(field as usize)
         .map(|x| *x)
