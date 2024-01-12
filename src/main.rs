@@ -1,6 +1,6 @@
 use std::thread::sleep;
 
-use rustbook::QueryBoxed;
+use rustbook::query_transformation::QueryBoxed;
 
 fn main() {
     for _x in 0..20 {

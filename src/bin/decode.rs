@@ -1,11 +1,11 @@
-use rustbook::{decode_instruction_stream, pp_asm};
 use std::{fs, io};
+use rustbook::decoder;
 
 const FILES: [&str; 4] = [
     "listing_0037_single_register_mov",
     "listing_0038_many_register_mov",
     "listing_0039_more_movs",
-    "listing_0040_challenge_movs"
+    "listing_0040_challenge_movs",
 ];
 
 fn main() -> io::Result<()> {
@@ -18,12 +18,12 @@ fn main() -> io::Result<()> {
             // too eagerly.
             .map(|x| x.expect("oops"));
 
-        for instruction in decode_instruction_stream(instruction_stream)
-            .map(|instructions| instructions.iter().map(pp_asm).collect::<Vec<String>>())
+        for instruction in decoder::decode_instruction_stream(instruction_stream)
+            .map(|instructions| instructions.iter().map(decoder::pp_asm).collect::<Vec<String>>())
             .unwrap_or_else(|(instructions, error)| {
                 instructions
                     .iter()
-                    .map(pp_asm)
+                    .map(decoder::pp_asm)
                     .chain(std::iter::once(error))
                     .collect::<Vec<String>>()
             })
