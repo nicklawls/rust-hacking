@@ -15,7 +15,14 @@ pub enum Src {
 #[derive(Debug)]
 pub enum Instruction {
     /** Move Destination to Source */
-    Mov { dst: Dst, src: Src },
+    Mov {
+        dst: Dst,
+        src: Src,
+    },
+    Add {
+        dst: Dst,
+        src: Src,
+    },
 }
 
 /// Pretty print instructions as ASM.
@@ -66,34 +73,37 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         return format!("[{formula}]");
     }
 
+    fn pp_dst_src(dst: &Dst, src: &Src) -> String {
+        let dst = match dst {
+            Dst::Reg(r) => pp_register(r),
+            Dst::Ea(ea) => pp_effective_address(ea),
+        };
+        let src = match src {
+            Src::Reg(x) => pp_register(x),
+            Src::Imm8 {
+                imm,
+                is_ambiguous_source,
+            } => match *is_ambiguous_source {
+                true => format!("byte {imm}"),
+                false => imm.to_string(),
+            },
+            Src::Imm16 {
+                imm,
+                is_ambiguous_source,
+            } => match *is_ambiguous_source {
+                true => {
+                    format!("word {imm}")
+                }
+                false => imm.to_string(),
+            },
+            Src::Ea(ea) => pp_effective_address(ea),
+        };
+        return format!("{dst}, {src}");
+    }
+
     match instruction {
-        Instruction::Mov { dst, src } => {
-            let dst = match dst {
-                Dst::Reg(r) => pp_register(r),
-                Dst::Ea(ea) => pp_effective_address(ea),
-            };
-            let src = match src {
-                Src::Reg(x) => pp_register(x),
-                Src::Imm8 {
-                    imm,
-                    is_ambiguous_source,
-                } => match *is_ambiguous_source {
-                    true => format!("byte {imm}"),
-                    false => imm.to_string(),
-                },
-                Src::Imm16 {
-                    imm,
-                    is_ambiguous_source,
-                } => match *is_ambiguous_source {
-                    true => {
-                        format!("word {imm}")
-                    }
-                    false => imm.to_string(),
-                },
-                Src::Ea(ea) => pp_effective_address(ea),
-            };
-            format!("mov {dst}, {src}")
-        }
+        Instruction::Mov { dst, src } => ["mov", &pp_dst_src(dst, src)].join(" "),
+        Instruction::Add { dst, src } => ["add", &pp_dst_src(dst, src)].join(" "),
     }
 }
 
@@ -168,7 +178,7 @@ where
         // function context. So instead, use an IIFE.
 
         // closure because I'm too lazy to type out parameters
-        let next_instruction = (|| {
+        let next_instruction = (|| -> Result<Instruction, String> {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
             let opcode_7 = byte_1 >> 1;
@@ -200,42 +210,9 @@ where
 
                 Ok(Instruction::Mov { dst, src })
             } else if opcode_6 == 0b100010 {
-                // various MOVs
-                let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
-                let w_bit = (byte_1 & 0b00000001) != 0;
-                let byte_2 = instruction_iter
-                    .next()
-                    .ok_or("missing byte 2 of reg->reg")?;
-                let mod_field = byte_2 >> 6;
-                let reg_field = (byte_2 & 0b00111000) >> 3;
-                let r_m_field = byte_2 & 0b00000111;
-
-                let reg_register = decode_register(reg_field, w_bit)?;
-
-                if 0b11 == mod_field {
-                    let r_m_register = decode_register(r_m_field, w_bit)?;
-                    // if d is 1, REG is the dest, meaning R/M is the source
-                    let (dst, src) = if d_bit {
-                        (reg_register, r_m_register)
-                    } else {
-                        (r_m_register, reg_register)
-                    };
-                    Ok(Instruction::Mov {
-                        dst: Dst::Reg(dst),
-                        src: Src::Reg(src),
-                    })
-                } else {
-                    let address =
-                        decode_effective_address(mod_field, r_m_field, &mut instruction_iter)?;
-
-                    let (dst, src) = if d_bit {
-                        (Dst::Reg(reg_register), Src::Ea(address))
-                    } else {
-                        (Dst::Ea(address), Src::Reg(reg_register))
-                    };
-
-                    Ok(Instruction::Mov { dst, src })
-                }
+                decode_reg_mod_rm(byte_1, &mut instruction_iter)
+                    .map_err(|e| format!("MOV: {e}"))
+                    .map(|(dst, src)| Instruction::Mov { dst, src })
             } else if opcode_6 == 0b101000 {
                 // MOV memory/accumulator
                 // These have two 7-bit rows in the manual, but the
@@ -293,6 +270,10 @@ where
                 };
 
                 Ok(Instruction::Mov { dst, src })
+            } else if opcode_6 == 0b000000 {
+                decode_reg_mod_rm(byte_1, &mut instruction_iter)
+                    .map_err(|e| format!("ADD: {e}"))
+                    .map(|(dst, src)| Instruction::Add { dst, src })
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
@@ -305,6 +286,44 @@ where
     }
 
     return Ok(instructions);
+}
+
+fn decode_reg_mod_rm<I>(byte_1: u8, instruction_iter: &mut I) -> Result<(Dst, Src), String>
+where
+    I: Iterator<Item = u8>,
+{
+    // various MOVs
+    let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
+    let w_bit = (byte_1 & 0b00000001) != 0;
+    let byte_2 = instruction_iter
+        .next()
+        .ok_or("missing byte 2 of reg-mod-rm")?;
+    let mod_field = byte_2 >> 6;
+    let reg_field = (byte_2 & 0b00111000) >> 3;
+    let r_m_field = byte_2 & 0b00000111;
+
+    let reg_register = decode_register(reg_field, w_bit)?;
+
+    if 0b11 == mod_field {
+        let r_m_register = decode_register(r_m_field, w_bit)?;
+        // if d is 1, REG is the dest, meaning R/M is the source
+        let (dst, src) = if d_bit {
+            (Dst::Reg(reg_register), Src::Reg(r_m_register))
+        } else {
+            (Dst::Reg(r_m_register), Src::Reg(reg_register))
+        };
+        Ok::<(Dst, Src), String>((dst, src))
+    } else {
+        let address = decode_effective_address(mod_field, r_m_field, instruction_iter)?;
+
+        let (dst, src) = if d_bit {
+            (Dst::Reg(reg_register), Src::Ea(address))
+        } else {
+            (Dst::Ea(address), Src::Reg(reg_register))
+        };
+
+        Ok((dst, src))
+    }
 }
 
 fn decode_effective_address<I>(
