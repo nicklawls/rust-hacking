@@ -184,7 +184,7 @@ where
             let opcode_7 = byte_1 >> 1;
 
             if opcode_4 == 0b1011 {
-                let w_bit = ((byte_1 & 0b00001000) >> 3) != 0;
+                let w_bit = extract_bit(byte_1, 4);
                 let reg_field = byte_1 & 0b00000111;
                 let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
 
@@ -217,8 +217,8 @@ where
                 // MOV memory/accumulator
                 // These have two 7-bit rows in the manual, but the
                 // D bit has a semantic, deciding if mem is destination
-                let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
-                let w_bit = (byte_1 & 0b00000001) != 0;
+                let d_bit = extract_bit(byte_1, 2);
+                let w_bit = extract_bit(byte_1, 1);
                 let addr_lo = instruction_iter.next().ok_or("mem/acc addr_low")?;
                 let addr_hi = instruction_iter.next().ok_or("mem/acc addr_hi")?;
                 let addr = EffectiveAddress::DirectAddress(build_u16(addr_hi, addr_lo));
@@ -231,7 +231,7 @@ where
 
                 Ok(Instruction::Mov { dst, src })
             } else if opcode_7 == 0b1100011 {
-                let w_bit = (byte_1 & 0b00000001) != 0;
+                let w_bit = extract_bit(byte_1, 1);
                 let byte_2 = instruction_iter
                     .next()
                     .ok_or("missing byte 2 of imm->reg")?;
@@ -293,8 +293,8 @@ where
     I: Iterator<Item = u8>,
 {
     // various MOVs
-    let d_bit = ((byte_1 & 0b00000010) >> 1) != 0;
-    let w_bit = (byte_1 & 0b00000001) != 0;
+    let d_bit = extract_bit(byte_1, 2);
+    let w_bit = extract_bit(byte_1, 1);
     let byte_2 = instruction_iter
         .next()
         .ok_or("missing byte 2 of reg-mod-rm")?;
@@ -430,4 +430,9 @@ fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
         .get(field as usize)
         .map(|x| *x)
         .ok_or("missing register".to_string());
+}
+
+/// 1-based indexing for some reason
+fn extract_bit(byte: u8, nth_bit: u32) -> bool {
+    (byte.wrapping_shr(nth_bit - 1) & 0b00000001) != 0
 }
