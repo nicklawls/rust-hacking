@@ -107,7 +107,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 
 /// "If the displacement is only a single byte, the 8086 or 8088 automatically
 /// sign-extends this quantity to 16-bits before using the information in
@@ -336,38 +336,64 @@ where
 {
     type EA = EffectiveAddress;
 
-    let (disp, case_110) = match mod_field {
+    match mod_field {
         0b00 => {
-            let byte_3 = instruction_iter.next().ok_or("special case byte 3")?;
-            let byte_4 = instruction_iter.next().ok_or("special case byte 4")?;
-            Ok((None, EA::DirectAddress(build_u16(byte_4, byte_3))))
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(None)),
+                0b001 => Ok(EA::BxDi(None)),
+                0b010 => Ok(EA::BpSi(None)),
+                0b011 => Ok(EA::BpDi(None)),
+                0b100 => Ok(EA::SI(None)),
+                0b101 => Ok(EA::DI(None)),
+                0b110 => {
+                    let byte_3 = instruction_iter.next().ok_or("special case byte 3")?;
+                    let byte_4 = instruction_iter.next().ok_or("special case byte 4")?;
+                    Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+                }
+                0b111 => Ok(EA::BX(None)),
+                _ => Err("more than 3 bits for r_m when mod = 0b00"),
+            }?;
+
+            return Ok(r_m_address);
         }
         0b01 => {
             let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
             let d = Displacement::D8(byte_3 as i8 as i16);
-            Ok((Some(d), EA::BP(d)))
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(Some(d))),
+                0b001 => Ok(EA::BxDi(Some(d))),
+                0b010 => Ok(EA::BpSi(Some(d))),
+                0b011 => Ok(EA::BpDi(Some(d))),
+                0b100 => Ok(EA::SI(Some(d))),
+                0b101 => Ok(EA::DI(Some(d))),
+                0b110 => Ok(EA::BP(d)),
+                0b111 => Ok(EA::BX(Some(d))),
+                _ => Err("more than 3 bits for r_m when MOD = 0b01"),
+            }?;
+
+            return Ok(r_m_address);
         }
         0b10 => {
             let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
             let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
             let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
-            Ok((Some(d), EA::BP(d)))
+            let r_m_address = match r_m_field {
+                0b000 => Ok(EA::BxSi(Some(d))),
+                0b001 => Ok(EA::BxDi(Some(d))),
+                0b010 => Ok(EA::BpSi(Some(d))),
+                0b011 => Ok(EA::BpDi(Some(d))),
+                0b100 => Ok(EA::SI(Some(d))),
+                0b101 => Ok(EA::DI(Some(d))),
+                0b110 => Ok(EA::BP(d)),
+                0b111 => Ok(EA::BX(Some(d))),
+                _ => Err("more than 3 bits for r_m when MOD = 0b11"),
+            }?;
+
+            return Ok(r_m_address);
         }
         // register -> register
-        _ => Err(format!("unknown field in mod: {mod_field:#b}")),
-    }?;
-
-    return match r_m_field {
-        0b000 => Ok(EA::BxSi(disp)),
-        0b001 => Ok(EA::BxDi(disp)),
-        0b010 => Ok(EA::BpSi(disp)),
-        0b011 => Ok(EA::BpDi(disp)),
-        0b100 => Ok(EA::SI(disp)),
-        0b101 => Ok(EA::DI(disp)),
-        0b110 => Ok(case_110),
-        0b111 => Ok(EA::BX(disp)),
-        _ => Err("more than 3 bits for r_m when mod".to_string()),
-    };
+        _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
+    }
 }
 
 /// In this ISA, later-coming bytes are the hight bytes
