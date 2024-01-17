@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug)]
 pub enum Dst {
     Reg(Register),
@@ -334,67 +336,63 @@ fn decode_effective_address<I>(
 where
     I: Iterator<Item = u8>,
 {
-    type EA = EffectiveAddress;
+    let formulae = HashMap::from(FORMULAE);
 
+    // while these look structurally similar, notice how ? is inside the `else if`
+    // in the first case, while outside in the second. And consider that those
+    // mutate the iterator...
     match mod_field {
         0b00 => {
-            let r_m_address = match r_m_field {
-                0b000 => Ok(EA::BxSi(None)),
-                0b001 => Ok(EA::BxDi(None)),
-                0b010 => Ok(EA::BpSi(None)),
-                0b011 => Ok(EA::BpDi(None)),
-                0b100 => Ok(EA::SI(None)),
-                0b101 => Ok(EA::DI(None)),
-                0b110 => {
-                    let byte_3 = instruction_iter.next().ok_or("special case byte 3")?;
-                    let byte_4 = instruction_iter.next().ok_or("special case byte 4")?;
-                    Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
-                }
-                0b111 => Ok(EA::BX(None)),
-                _ => Err("more than 3 bits for r_m when mod = 0b00"),
-            }?;
-
-            return Ok(r_m_address);
+            if let Some(formula) = formulae.get(&r_m_field) {
+                Ok(formula(None))
+            } else if r_m_field == 0b110 {
+                let byte_3 = instruction_iter.next().ok_or("MOD=00 byte 3")?;
+                let byte_4 = instruction_iter.next().ok_or("MOD=00 case byte 4")?;
+                Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+            } else {
+                Err("more than 3 bits for r_m when mod = 0b00".to_string())
+            }
         }
         0b01 => {
             let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
             let d = Displacement::D8(byte_3 as i8 as i16);
-            let r_m_address = match r_m_field {
-                0b000 => Ok(EA::BxSi(Some(d))),
-                0b001 => Ok(EA::BxDi(Some(d))),
-                0b010 => Ok(EA::BpSi(Some(d))),
-                0b011 => Ok(EA::BpDi(Some(d))),
-                0b100 => Ok(EA::SI(Some(d))),
-                0b101 => Ok(EA::DI(Some(d))),
-                0b110 => Ok(EA::BP(d)),
-                0b111 => Ok(EA::BX(Some(d))),
-                _ => Err("more than 3 bits for r_m when MOD = 0b01"),
-            }?;
-
-            return Ok(r_m_address);
+            if let Some(formula) = formulae.get(&r_m_field) {
+                Ok(formula(Some(d)))
+            } else if r_m_field == 0b110 {
+                Ok(EA::BP(d))
+            } else {
+                Err("more than 3 bits for r_m when MOD = 0b01".to_string())
+            }
         }
         0b10 => {
             let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
-            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
+            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 4")?;
             let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
-            let r_m_address = match r_m_field {
-                0b000 => Ok(EA::BxSi(Some(d))),
-                0b001 => Ok(EA::BxDi(Some(d))),
-                0b010 => Ok(EA::BpSi(Some(d))),
-                0b011 => Ok(EA::BpDi(Some(d))),
-                0b100 => Ok(EA::SI(Some(d))),
-                0b101 => Ok(EA::DI(Some(d))),
-                0b110 => Ok(EA::BP(d)),
-                0b111 => Ok(EA::BX(Some(d))),
-                _ => Err("more than 3 bits for r_m when MOD = 0b11"),
-            }?;
-
-            return Ok(r_m_address);
+            if let Some(formula) = formulae.get(&r_m_field) {
+                Ok(formula(Some(d)))
+            } else if r_m_field == 0b110 {
+                Ok(EA::BP(d))
+            } else {
+                Err("more than 3 bits for r_m when MOD = 0b11".to_string())
+            }
         }
         // register -> register
         _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
     }
 }
+
+/// Constructor for effective addresses
+type Formula = fn(Option<Displacement>) -> EffectiveAddress;
+type EA = EffectiveAddress;
+const FORMULAE: [(u8, Formula); 7] = [
+    (0b000, EA::BxSi),
+    (0b001, EA::BxDi),
+    (0b010, EA::BpSi),
+    (0b011, EA::BpDi),
+    (0b100, EA::SI),
+    (0b101, EA::DI),
+    (0b111, EA::BX),
+];
 
 /// In this ISA, later-coming bytes are the hight bytes
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
