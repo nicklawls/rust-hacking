@@ -167,9 +167,9 @@ where
     I: IntoIterator<Item = u8>,
 {
     let mut instructions: Vec<Instruction> = vec![];
-    let mut instruction_iter = instruction_stream.into_iter();
+    let mut stream_bytes = instruction_stream.into_iter();
 
-    while let Some(byte_1) = instruction_iter.next() {
+    while let Some(byte_1) = stream_bytes.next() {
         // Split this up int two phases for clarity and exhaustiveness
         // 1. calculate the next instruction or error, consuming from the
         //    iterator as needed
@@ -190,14 +190,10 @@ where
                 let reg_field = byte_1 & 0b00000111;
                 let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
 
-                let byte_2 = instruction_iter
-                    .next()
-                    .ok_or("missing byte 2 of reg->imm")?;
+                let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg->imm")?;
 
                 let src = if w_bit {
-                    let byte_3 = instruction_iter
-                        .next()
-                        .ok_or("missing byte 3 of reg->imm")?;
+                    let byte_3 = stream_bytes.next().ok_or("missing byte 3 of reg->imm")?;
                     let imm_16 = build_u16(byte_3, byte_2);
                     Src::Imm16 {
                         imm: imm_16,
@@ -212,7 +208,7 @@ where
 
                 Ok(Instruction::Mov { dst, src })
             } else if opcode_6 == 0b100010 {
-                decode_reg_mod_rm(byte_1, &mut instruction_iter)
+                decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("MOV: {e}"))
                     .map(|(dst, src)| Instruction::Mov { dst, src })
             } else if opcode_6 == 0b101000 {
@@ -221,8 +217,8 @@ where
                 // D bit has a semantic, deciding if mem is destination
                 let d_bit = extract_bit(byte_1, 2);
                 let w_bit = extract_bit(byte_1, 1);
-                let addr_lo = instruction_iter.next().ok_or("mem/acc addr_low")?;
-                let addr_hi = instruction_iter.next().ok_or("mem/acc addr_hi")?;
+                let addr_lo = stream_bytes.next().ok_or("mem/acc addr_low")?;
+                let addr_hi = stream_bytes.next().ok_or("mem/acc addr_hi")?;
                 let addr = EffectiveAddress::DirectAddress(build_u16(addr_hi, addr_lo));
                 let reg = if w_bit { Reg::AX } else { Reg::AL };
                 let (dst, src) = if d_bit {
@@ -234,9 +230,7 @@ where
                 Ok(Instruction::Mov { dst, src })
             } else if opcode_7 == 0b1100011 {
                 let w_bit = extract_bit(byte_1, 1);
-                let byte_2 = instruction_iter
-                    .next()
-                    .ok_or("missing byte 2 of imm->reg")?;
+                let byte_2 = stream_bytes.next().ok_or("missing byte 2 of imm->reg")?;
                 let mod_field = byte_2 >> 6;
                 let reg_field = (byte_2 & 0b00111000) >> 3; // always 000, unused
                 if reg_field != 0b000 {
@@ -245,21 +239,17 @@ where
 
                 let r_m_field = byte_2 & 0b00000111;
 
-                // WARN: this must appear first! it mutates instruction_iter.
+                // WARN: this must appear first! it mutates stream_bytes.
                 let dst = Dst::Ea(decode_effective_address(
                     mod_field,
                     r_m_field,
-                    &mut instruction_iter,
+                    &mut stream_bytes,
                 )?);
 
-                let data_low = instruction_iter
-                    .next()
-                    .ok_or("Missing byte 3 of imm->reg")?;
+                let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
 
                 let src = if w_bit {
-                    let data_high = instruction_iter
-                        .next()
-                        .ok_or("Missing byte 4 of imm->reg")?;
+                    let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
                     Src::Imm16 {
                         imm: build_u16(data_high, data_low),
                         is_ambiguous_source: true,
@@ -273,7 +263,7 @@ where
 
                 Ok(Instruction::Mov { dst, src })
             } else if opcode_6 == 0b000000 {
-                decode_reg_mod_rm(byte_1, &mut instruction_iter)
+                decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("ADD: {e}"))
                     .map(|(dst, src)| Instruction::Add { dst, src })
             } else {
@@ -290,16 +280,14 @@ where
     return Ok(instructions);
 }
 
-fn decode_reg_mod_rm<I>(byte_1: u8, instruction_iter: &mut I) -> Result<(Dst, Src), String>
+fn decode_reg_mod_rm<Bytes>(byte_1: u8, stream_bytes: &mut Bytes) -> Result<(Dst, Src), String>
 where
-    I: Iterator<Item = u8>,
+    Bytes: Iterator<Item = u8>,
 {
     // various MOVs
     let d_bit = extract_bit(byte_1, 2);
     let w_bit = extract_bit(byte_1, 1);
-    let byte_2 = instruction_iter
-        .next()
-        .ok_or("missing byte 2 of reg-mod-rm")?;
+    let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg-mod-rm")?;
     let mod_field = byte_2 >> 6;
     let reg_field = (byte_2 & 0b00111000) >> 3;
     let r_m_field = byte_2 & 0b00000111;
@@ -316,7 +304,7 @@ where
         };
         Ok::<(Dst, Src), String>((dst, src))
     } else {
-        let address = decode_effective_address(mod_field, r_m_field, instruction_iter)?;
+        let address = decode_effective_address(mod_field, r_m_field, stream_bytes)?;
 
         let (dst, src) = if d_bit {
             (Dst::Reg(reg_register), Src::Ea(address))
@@ -328,13 +316,13 @@ where
     }
 }
 
-fn decode_effective_address<I>(
+fn decode_effective_address<Bytes>(
     mod_field: u8,
     r_m_field: u8,
-    instruction_iter: &mut I,
+    stream_bytes: &mut Bytes,
 ) -> Result<EffectiveAddress, String>
 where
-    I: Iterator<Item = u8>,
+    Bytes: Iterator<Item = u8>,
 {
     let formulae = HashMap::from(FORMULAE);
 
@@ -346,15 +334,15 @@ where
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(None))
             } else if r_m_field == 0b110 {
-                let byte_3 = instruction_iter.next().ok_or("MOD=00 byte 3")?;
-                let byte_4 = instruction_iter.next().ok_or("MOD=00 case byte 4")?;
+                let byte_3 = stream_bytes.next().ok_or("MOD=00 byte 3")?;
+                let byte_4 = stream_bytes.next().ok_or("MOD=00 case byte 4")?;
                 Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
             } else {
                 Err("more than 3 bits for r_m when mod = 0b00".to_string())
             }
         }
         0b01 => {
-            let byte_3 = instruction_iter.next().ok_or("MOD=01 byte 3")?;
+            let byte_3 = stream_bytes.next().ok_or("MOD=01 byte 3")?;
             let d = Displacement::D8(byte_3 as i8 as i16);
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
@@ -365,8 +353,8 @@ where
             }
         }
         0b10 => {
-            let byte_3 = instruction_iter.next().ok_or("MOD=11 byte 3")?;
-            let byte_4 = instruction_iter.next().ok_or("MOD=11 byte 4")?;
+            let byte_3 = stream_bytes.next().ok_or("MOD=11 byte 3")?;
+            let byte_4 = stream_bytes.next().ok_or("MOD=11 byte 4")?;
             let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
