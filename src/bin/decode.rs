@@ -1,11 +1,12 @@
 use std::{fs, io};
 use rustbook::decoder;
 
-const FILES: [&str; 4] = [
+const FILES: [&str; 5] = [
     "listing_0037_single_register_mov",
     "listing_0038_many_register_mov",
     "listing_0039_more_movs",
     "listing_0040_challenge_movs",
+    "listing_0041_add_sub_cmp_jnz"
 ];
 
 fn main() -> io::Result<()> {

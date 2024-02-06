@@ -25,6 +25,14 @@ pub enum Instruction {
         dst: Dst,
         src: Src,
     },
+    Sub {
+        dst: Dst,
+        src: Src,
+    },
+    Cmp {
+        dst: Dst,
+        src: Src,
+    },
 }
 
 /// Pretty print instructions as ASM.
@@ -106,6 +114,8 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     match instruction {
         Instruction::Mov { dst, src } => ["mov", &pp_dst_src(dst, src)].join(" "),
         Instruction::Add { dst, src } => ["add", &pp_dst_src(dst, src)].join(" "),
+        Instruction::Sub { dst, src } => ["sub", &pp_dst_src(dst, src)].join(" "),
+        Instruction::Cmp { dst, src } => ["cmp", &pp_dst_src(dst, src)].join(" "),
     }
 }
 
@@ -262,10 +272,59 @@ where
                 };
 
                 Ok(Instruction::Mov { dst, src })
-            } else if opcode_6 == 0b000000 {
+            }
+            // ADD/SUB/CMP
+            else if opcode_6 == 0b000000 {
                 decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("ADD: {e}"))
                     .map(|(dst, src)| Instruction::Add { dst, src })
+            } else if opcode_6 == 0b100000 {
+                let s_bit = extract_bit(byte_1, 2);
+                let w_bit = extract_bit(byte_1, 1);
+                let byte_2 = stream_bytes
+                    .next()
+                    .ok_or("missing byte 2 of add/cmp/sub imm->reg")?;
+                let mod_field = byte_2 >> 6;
+                let opcode_extension = (byte_2 & 0b00111000) >> 3;
+
+                let r_m_field = byte_2 & 0b00000111;
+
+                // WARN: this must appear first! it mutates stream_bytes.
+                let dst = if mod_field == 0b11 {
+                    let reg = decode_register(r_m_field, w_bit)?;
+                    Dst::Reg(reg)
+                } else {
+                    Dst::Ea(decode_effective_address(
+                        mod_field,
+                        r_m_field,
+                        &mut stream_bytes,
+                    )?)
+                };
+
+                let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
+
+                let src = if !s_bit && w_bit {
+                    let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
+                    Src::Imm16 {
+                        imm: build_u16(data_high, data_low),
+                        is_ambiguous_source: false,
+                    }
+                } else {
+                    Src::Imm8 {
+                        imm: data_low,
+                        is_ambiguous_source: !s_bit,
+                    }
+                };
+
+                if opcode_extension == 0b000 {
+                    Ok(Instruction::Add { dst, src })
+                } else if opcode_extension == 0b101 {
+                    Ok(Instruction::Sub { dst, src })
+                } else if opcode_extension == 0b111 {
+                    Ok(Instruction::Cmp { dst, src })
+                } else {
+                    Err("unknown little opcode for imm -> reg/mem".to_string())
+                }
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
