@@ -9,8 +9,8 @@ pub enum Dst {
 #[derive(Debug)]
 pub enum Src {
     Reg(Register),
-    Imm8 { imm: u8, is_ambiguous_source: bool },
-    Imm16 { imm: u16, is_ambiguous_source: bool },
+    Imm8 { imm: u8, show_specifier: bool },
+    Imm16 { imm: u16, show_specifier: bool },
     Ea(EffectiveAddress),
 }
 
@@ -92,20 +92,24 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             Src::Reg(x) => pp_register(x),
             Src::Imm8 {
                 imm,
-                is_ambiguous_source,
-            } => match *is_ambiguous_source {
-                true => format!("byte {imm}"),
-                false => imm.to_string(),
-            },
+                show_specifier,
+            } => {
+                if *show_specifier {
+                    format!("byte {imm}")
+                } else {
+                    imm.to_string()
+                }
+            }
             Src::Imm16 {
                 imm,
-                is_ambiguous_source,
-            } => match *is_ambiguous_source {
-                true => {
+                show_specifier,
+            } => {
+                if *show_specifier {
                     format!("word {imm}")
+                } else {
+                    imm.to_string()
                 }
-                false => imm.to_string(),
-            },
+            }
             Src::Ea(ea) => pp_effective_address(ea),
         };
         return format!("{dst}, {src}");
@@ -207,12 +211,12 @@ where
                     let imm_16 = build_u16(byte_3, byte_2);
                     Src::Imm16 {
                         imm: imm_16,
-                        is_ambiguous_source: false,
+                        show_specifier: false,
                     }
                 } else {
                     Src::Imm8 {
                         imm: byte_2,
-                        is_ambiguous_source: false,
+                        show_specifier: false,
                     }
                 };
 
@@ -262,12 +266,12 @@ where
                     let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
                     Src::Imm16 {
                         imm: build_u16(data_high, data_low),
-                        is_ambiguous_source: true,
+                        show_specifier: true,
                     }
                 } else {
                     Src::Imm8 {
                         imm: data_low,
-                        is_ambiguous_source: true,
+                        show_specifier: true,
                     }
                 };
 
@@ -307,12 +311,12 @@ where
                     let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
                     Src::Imm16 {
                         imm: build_u16(data_high, data_low),
-                        is_ambiguous_source: false,
+                        show_specifier: true,
                     }
                 } else {
                     Src::Imm8 {
                         imm: data_low,
-                        is_ambiguous_source: !s_bit,
+                        show_specifier: !s_bit,
                     }
                 };
 
