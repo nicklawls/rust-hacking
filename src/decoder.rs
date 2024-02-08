@@ -11,6 +11,7 @@ pub enum Src {
     Reg(Register),
     Imm8 { imm: u8, show_specifier: bool },
     Imm16 { imm: u16, show_specifier: bool },
+    ImmSigned16 { imm: i16, show_specifier: bool },
     Ea(EffectiveAddress),
 }
 
@@ -101,6 +102,16 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                 }
             }
             Src::Imm16 {
+                imm,
+                show_specifier,
+            } => {
+                if *show_specifier {
+                    format!("word {imm}")
+                } else {
+                    imm.to_string()
+                }
+            }
+            Src::ImmSigned16 {
                 imm,
                 show_specifier,
             } => {
@@ -305,20 +316,32 @@ where
                     )?)
                 };
 
-                let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
+                let data_low = stream_bytes.next().ok_or("Missing data of imm->reg")?;
 
-                let src = if !s_bit && w_bit {
-                    let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
-                    Src::Imm16 {
-                        imm: build_u16(data_high, data_low),
-                        show_specifier: true,
+                let src = if w_bit {
+                    if s_bit {
+                        Src::ImmSigned16 {
+                            imm: (data_low as i8) as i16,
+                            show_specifier: true,
+                        }
+                    } else {
+                        let data_high =
+                            stream_bytes.next().ok_or("Missing data high of imm->reg")?;
+                        let imm = build_u16(data_high, data_low);
+                        Src::Imm16 {
+                            imm,
+                            show_specifier: true,
+                        }
                     }
                 } else {
                     Src::Imm8 {
                         imm: data_low,
-                        show_specifier: !s_bit,
+                        show_specifier: true,
                     }
                 };
+
+                eprintln!("{byte_1:#b}                  {byte_2:#b}");
+                eprintln!("op:{opcode_6:#b} s:{s_bit} w:{w_bit} mod:{mod_field:#b} ext:{opcode_extension:#b} rm:{r_m_field:#b}");
 
                 if opcode_extension == 0b000 {
                     Ok(Instruction::Add { dst, src })

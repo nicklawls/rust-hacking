@@ -1,12 +1,12 @@
-use std::{fs, io};
 use rustbook::decoder;
+use std::{convert::identity, fs, io};
 
 const FILES: [&str; 1] = [
     // "listing_0037_single_register_mov",
     // "listing_0038_many_register_mov",
     // "listing_0039_more_movs",
     // "listing_0040_challenge_movs",
-    "listing_0041_add_sub_cmp_jnz"
+    "listing_0041_add_sub_cmp_jnz",
 ];
 
 fn main() -> io::Result<()> {
@@ -22,14 +22,16 @@ fn main() -> io::Result<()> {
         println!("");
 
         for instruction in decoder::decode_instruction_stream(instruction_stream)
-            .map(|instructions| instructions.iter().map(decoder::pp_asm).collect::<Vec<String>>())
-            .unwrap_or_else(|(instructions, error)| {
-                instructions
-                    .iter()
-                    .map(decoder::pp_asm)
-                    // .chain(std::iter::once(error))
-                    .collect::<Vec<String>>()
-            })
+            .map_or_else(
+                |(instructions, error)| {
+                    eprintln!("{error:#?}");
+                    instructions
+                },
+                identity,
+            )
+            .iter()
+            .map(decoder::pp_asm)
+            .collect::<Vec<String>>()
         {
             println!("{instruction}");
         }
