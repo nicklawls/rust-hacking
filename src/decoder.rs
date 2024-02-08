@@ -2,17 +2,17 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum Dst {
-    Reg(Register),
-    Ea(EffectiveAddress),
+    Reg { reg: Register },
+    Ea { ea: EffectiveAddress },
 }
 
 #[derive(Debug)]
 pub enum Src {
-    Reg(Register),
+    Reg { reg: Register },
     Imm8 { imm: u8, show_specifier: bool },
     Imm16 { imm: u16, show_specifier: bool },
     ImmSigned16 { imm: i16, show_specifier: bool },
-    Ea(EffectiveAddress),
+    Ea { ea: EffectiveAddress },
 }
 
 #[derive(Debug)]
@@ -36,6 +36,57 @@ pub enum Instruction {
     },
 }
 
+#[derive(Debug)]
+
+/// "If the displacement is only a single byte, the 8086 or 8088 automatically
+/// sign-extends this quantity to 16-bits before using the information in
+/// further address calculations"
+/// implying that displacements are kind of always signed after decoding
+pub enum Displacement {
+    D8 { d8: i16 },
+    D16 { d16: i16 },
+}
+
+#[derive(Debug)]
+pub enum EffectiveAddress {
+    BxSi { disp: Option<Displacement> },
+    BxDi { disp: Option<Displacement> },
+    BpSi { disp: Option<Displacement> },
+    BpDi { disp: Option<Displacement> },
+    SI { disp: Option<Displacement> },
+    DI { disp: Option<Displacement> },
+    DirectAddress { disp: u16 },
+    BP { disp: Displacement },
+    BX { disp: Option<Displacement> },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Register {
+    // Low byte
+    AL,
+    BL,
+    CL,
+    DL,
+
+    // High byte
+    AH,
+    BH,
+    CH,
+    DH,
+
+    // Both bytes
+    AX,
+    BX,
+    CX,
+    DX,
+
+    // ???
+    SP,
+    BP,
+    SI,
+    DI,
+}
+
 /// Pretty print instructions as ASM.
 pub fn pp_asm(instruction: &Instruction) -> String {
     fn pp_register(reg: &Register) -> String {
@@ -51,7 +102,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                 .join(" + ");
 
             match displacement {
-                Some(Displacement::D8(disp) | Displacement::D16(disp)) => {
+                Some(Displacement::D8 { d8: disp } | Displacement::D16 { d16: disp }) => {
                     if disp.is_positive() {
                         reg_str.push_str(format!(" + {disp}").as_str())
                     }
@@ -70,15 +121,15 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         type EA = EffectiveAddress;
 
         let formula = match ea {
-            EA::BxSi(disp) => pp_formula(vec![R::BX, R::SI], disp.as_ref()),
-            EA::BxDi(disp) => pp_formula(vec![R::BX, R::DI], disp.as_ref()),
-            EA::BpSi(disp) => pp_formula(vec![R::BP, R::SI], disp.as_ref()),
-            EA::BpDi(disp) => pp_formula(vec![R::BP, R::DI], disp.as_ref()),
-            EA::SI(disp) => pp_formula(vec![R::SI], disp.as_ref()),
-            EA::DI(disp) => pp_formula(vec![R::DI], disp.as_ref()),
-            EA::DirectAddress(disp_16) => disp_16.to_string(),
-            EA::BP(some_disp) => pp_formula(vec![R::BP], Some(some_disp)),
-            EA::BX(disp) => pp_formula(vec![R::BX], disp.as_ref()),
+            EA::BxSi { disp } => pp_formula(vec![R::BX, R::SI], disp.as_ref()),
+            EA::BxDi { disp } => pp_formula(vec![R::BX, R::DI], disp.as_ref()),
+            EA::BpSi { disp } => pp_formula(vec![R::BP, R::SI], disp.as_ref()),
+            EA::BpDi { disp } => pp_formula(vec![R::BP, R::DI], disp.as_ref()),
+            EA::SI { disp } => pp_formula(vec![R::SI], disp.as_ref()),
+            EA::DI { disp } => pp_formula(vec![R::DI], disp.as_ref()),
+            EA::DirectAddress { disp: disp_16 } => disp_16.to_string(),
+            EA::BP { disp: some_disp } => pp_formula(vec![R::BP], Some(some_disp)),
+            EA::BX { disp } => pp_formula(vec![R::BX], disp.as_ref()),
         };
 
         return format!("[{formula}]");
@@ -86,11 +137,11 @@ pub fn pp_asm(instruction: &Instruction) -> String {
 
     fn pp_dst_src(dst: &Dst, src: &Src) -> String {
         let dst = match dst {
-            Dst::Reg(r) => pp_register(r),
-            Dst::Ea(ea) => pp_effective_address(ea),
+            Dst::Reg { reg: r } => pp_register(r),
+            Dst::Ea { ea } => pp_effective_address(ea),
         };
         let src = match src {
-            Src::Reg(x) => pp_register(x),
+            Src::Reg { reg: x } => pp_register(x),
             Src::Imm8 {
                 imm,
                 show_specifier,
@@ -121,7 +172,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                     imm.to_string()
                 }
             }
-            Src::Ea(ea) => pp_effective_address(ea),
+            Src::Ea { ea } => pp_effective_address(ea),
         };
         return format!("{dst}, {src}");
     }
@@ -132,57 +183,6 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         Instruction::Sub { dst, src } => ["sub", &pp_dst_src(dst, src)].join(" "),
         Instruction::Cmp { dst, src } => ["cmp", &pp_dst_src(dst, src)].join(" "),
     }
-}
-
-#[derive(Debug)]
-
-/// "If the displacement is only a single byte, the 8086 or 8088 automatically
-/// sign-extends this quantity to 16-bits before using the information in
-/// further address calculations"
-/// implying that displacements are kind of always signed after decoding
-pub enum Displacement {
-    D8(i16),
-    D16(i16),
-}
-
-#[derive(Debug)]
-pub enum EffectiveAddress {
-    BxSi(Option<Displacement>),
-    BxDi(Option<Displacement>),
-    BpSi(Option<Displacement>),
-    BpDi(Option<Displacement>),
-    SI(Option<Displacement>),
-    DI(Option<Displacement>),
-    DirectAddress(u16),
-    BP(Displacement),
-    BX(Option<Displacement>),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Register {
-    // Low byte
-    AL,
-    BL,
-    CL,
-    DL,
-
-    // High byte
-    AH,
-    BH,
-    CH,
-    DH,
-
-    // Both bytes
-    AX,
-    BX,
-    CX,
-    DX,
-
-    // ???
-    SP,
-    BP,
-    SI,
-    DI,
 }
 
 pub fn decode_instruction_stream<I>(
@@ -213,7 +213,9 @@ where
             if opcode_4 == 0b1011 {
                 let w_bit = extract_bit(byte_1, 4);
                 let reg_field = byte_1 & 0b00000111;
-                let dst = Dst::Reg(decode_register(reg_field, w_bit)?);
+                let dst = Dst::Reg {
+                    reg: decode_register(reg_field, w_bit)?,
+                };
 
                 let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg->imm")?;
 
@@ -244,12 +246,14 @@ where
                 let w_bit = extract_bit(byte_1, 1);
                 let addr_lo = stream_bytes.next().ok_or("mem/acc addr_low")?;
                 let addr_hi = stream_bytes.next().ok_or("mem/acc addr_hi")?;
-                let addr = EffectiveAddress::DirectAddress(build_u16(addr_hi, addr_lo));
+                let addr = EffectiveAddress::DirectAddress {
+                    disp: build_u16(addr_hi, addr_lo),
+                };
                 let reg = if w_bit { Reg::AX } else { Reg::AL };
                 let (dst, src) = if d_bit {
-                    (Dst::Ea(addr), Src::Reg(reg))
+                    (Dst::Ea { ea: addr }, Src::Reg { reg })
                 } else {
-                    (Dst::Reg(reg), Src::Ea(addr))
+                    (Dst::Reg { reg }, Src::Ea { ea: addr })
                 };
 
                 Ok(Instruction::Mov { dst, src })
@@ -265,11 +269,9 @@ where
                 let r_m_field = byte_2 & 0b00000111;
 
                 // WARN: this must appear first! it mutates stream_bytes.
-                let dst = Dst::Ea(decode_effective_address(
-                    mod_field,
-                    r_m_field,
-                    &mut stream_bytes,
-                )?);
+                let dst = Dst::Ea {
+                    ea: decode_effective_address(mod_field, r_m_field, &mut stream_bytes)?,
+                };
 
                 let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
 
@@ -307,13 +309,11 @@ where
                 // WARN: this must appear first! it mutates stream_bytes.
                 let dst = if mod_field == 0b11 {
                     let reg = decode_register(r_m_field, w_bit)?;
-                    Dst::Reg(reg)
+                    Dst::Reg { reg }
                 } else {
-                    Dst::Ea(decode_effective_address(
-                        mod_field,
-                        r_m_field,
-                        &mut stream_bytes,
-                    )?)
+                    Dst::Ea {
+                        ea: decode_effective_address(mod_field, r_m_field, &mut stream_bytes)?,
+                    }
                 };
 
                 let data_low = stream_bytes.next().ok_or("Missing data of imm->reg")?;
@@ -384,18 +384,24 @@ where
         let r_m_register = decode_register(r_m_field, w_bit)?;
         // if d is 1, REG is the dest, meaning R/M is the source
         let (dst, src) = if d_bit {
-            (Dst::Reg(reg_register), Src::Reg(r_m_register))
+            (
+                Dst::Reg { reg: reg_register },
+                Src::Reg { reg: r_m_register },
+            )
         } else {
-            (Dst::Reg(r_m_register), Src::Reg(reg_register))
+            (
+                Dst::Reg { reg: r_m_register },
+                Src::Reg { reg: reg_register },
+            )
         };
         Ok::<(Dst, Src), String>((dst, src))
     } else {
         let address = decode_effective_address(mod_field, r_m_field, stream_bytes)?;
 
         let (dst, src) = if d_bit {
-            (Dst::Reg(reg_register), Src::Ea(address))
+            (Dst::Reg { reg: reg_register }, Src::Ea { ea: address })
         } else {
-            (Dst::Ea(address), Src::Reg(reg_register))
+            (Dst::Ea { ea: address }, Src::Reg { reg: reg_register })
         };
 
         Ok((dst, src))
@@ -422,18 +428,22 @@ where
             } else if r_m_field == 0b110 {
                 let byte_3 = stream_bytes.next().ok_or("MOD=00 byte 3")?;
                 let byte_4 = stream_bytes.next().ok_or("MOD=00 case byte 4")?;
-                Ok(EA::DirectAddress(build_u16(byte_4, byte_3)))
+                Ok(EA::DirectAddress {
+                    disp: build_u16(byte_4, byte_3),
+                })
             } else {
                 Err("more than 3 bits for r_m when mod = 0b00".to_string())
             }
         }
         0b01 => {
             let byte_3 = stream_bytes.next().ok_or("MOD=01 byte 3")?;
-            let d = Displacement::D8(byte_3 as i8 as i16);
+            let d = Displacement::D8 {
+                d8: byte_3 as i8 as i16,
+            };
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
             } else if r_m_field == 0b110 {
-                Ok(EA::BP(d))
+                Ok(EA::BP { disp: d })
             } else {
                 Err("more than 3 bits for r_m when MOD = 0b01".to_string())
             }
@@ -441,11 +451,13 @@ where
         0b10 => {
             let byte_3 = stream_bytes.next().ok_or("MOD=11 byte 3")?;
             let byte_4 = stream_bytes.next().ok_or("MOD=11 byte 4")?;
-            let d = Displacement::D16(build_u16(byte_4, byte_3) as i16);
+            let d = Displacement::D16 {
+                d16: build_u16(byte_4, byte_3) as i16,
+            };
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
             } else if r_m_field == 0b110 {
-                Ok(EA::BP(d))
+                Ok(EA::BP { disp: d })
             } else {
                 Err("more than 3 bits for r_m when MOD = 0b11".to_string())
             }
@@ -459,13 +471,13 @@ where
 type Formula = fn(Option<Displacement>) -> EffectiveAddress;
 type EA = EffectiveAddress;
 const FORMULAE: [(u8, Formula); 7] = [
-    (0b000, EA::BxSi),
-    (0b001, EA::BxDi),
-    (0b010, EA::BpSi),
-    (0b011, EA::BpDi),
-    (0b100, EA::SI),
-    (0b101, EA::DI),
-    (0b111, EA::BX),
+    (0b000, |disp| EA::BxSi { disp }),
+    (0b001, |disp| EA::BxDi { disp }),
+    (0b010, |disp| EA::BpSi { disp }),
+    (0b011, |disp| EA::BpDi { disp }),
+    (0b100, |disp| EA::SI { disp }),
+    (0b101, |disp| EA::DI { disp }),
+    (0b111, |disp| EA::BX { disp }),
 ];
 
 /// In this ISA, later-coming bytes are the hight bytes
