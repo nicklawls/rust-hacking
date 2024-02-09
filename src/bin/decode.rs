@@ -2,7 +2,9 @@ use rustbook::decoder;
 use std::{env, fs, io};
 
 fn main() -> io::Result<()> {
-    let filename = env::args().nth(1).expect("file not found");
+    let filename = env::args()
+        .nth(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no second arg"))?;
     let fl = fs::File::open(filename.to_string())?;
     let file_len = fl.metadata()?.len();
     eprintln!("{}, {:#?} B", filename, file_len);
@@ -10,8 +12,6 @@ fn main() -> io::Result<()> {
         // have to map away results. A bit hacky, but avoids collecting
         // too eagerly.
         .map(|x| x.expect("oops"));
-    println!("bits 16");
-    println!("");
 
     let instructions = match decoder::decode_instruction_stream(instruction_stream) {
         Ok(instructions) => instructions,
@@ -21,12 +21,10 @@ fn main() -> io::Result<()> {
         }
     };
 
-    for instruction in instructions
-        .iter()
-        .map(decoder::pp_asm)
-        .collect::<Vec<String>>()
-    {
-        println!("{instruction}");
+    println!("bits 16");
+    println!("");
+    for instruction in instructions {
+        println!("{}", decoder::pp_asm(&instruction));
     }
     Ok(())
 }
