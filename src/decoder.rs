@@ -9,9 +9,9 @@ pub enum Dst {
 #[derive(Debug)]
 pub enum Src {
     Reg { reg: Register },
-    Imm8 { imm: u8, show_specifier: bool },
-    Imm16 { imm: u16, show_specifier: bool },
-    ImmSigned16 { imm: i16, show_specifier: bool },
+    Imm8 { imm: u8 },
+    Imm16 { imm: u16 },
+    ImmSigned16 { imm: i16 },
     Ea { ea: EffectiveAddress },
 }
 
@@ -136,37 +136,51 @@ pub fn pp_asm(instruction: &Instruction) -> String {
     }
 
     fn pp_dst_src(dst: &Dst, src: &Src) -> String {
-        let dst = match dst {
+        let dst_str = match dst {
             Dst::Reg { reg: r } => pp_register(r),
             Dst::Ea { ea } => pp_effective_address(ea),
         };
-        let src = match src {
+
+        let dst_is_wide = match dst {
+            Dst::Ea { ea: _ } => true,
+            Dst::Reg { reg } => match reg {
+                Register::AL
+                | Register::BL
+                | Register::CL
+                | Register::DL
+                | Register::AH
+                | Register::BH
+                | Register::CH
+                | Register::DH => false,
+                Register::AX
+                | Register::BX
+                | Register::CX
+                | Register::DX
+                | Register::SP
+                | Register::BP
+                | Register::SI
+                | Register::DI => true,
+            },
+        };
+
+        let src_str = match src {
             Src::Reg { reg: x } => pp_register(x),
-            Src::Imm8 {
-                imm,
-                show_specifier,
-            } => {
-                if *show_specifier {
+            Src::Imm8 { imm } => {
+                if dst_is_wide {
                     format!("byte {imm}")
                 } else {
                     imm.to_string()
                 }
             }
-            Src::Imm16 {
-                imm,
-                show_specifier,
-            } => {
-                if *show_specifier {
+            Src::Imm16 { imm } => {
+                if dst_is_wide && (*imm <= (u8::MAX as u16)) {
                     format!("word {imm}")
                 } else {
                     imm.to_string()
                 }
             }
-            Src::ImmSigned16 {
-                imm,
-                show_specifier,
-            } => {
-                if *show_specifier {
+            Src::ImmSigned16 { imm } => {
+                if dst_is_wide {
                     format!("word {imm}")
                 } else {
                     imm.to_string()
@@ -174,7 +188,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             }
             Src::Ea { ea } => pp_effective_address(ea),
         };
-        return format!("{dst}, {src}");
+        return format!("{dst_str}, {src_str}");
     }
 
     match instruction {
@@ -222,15 +236,9 @@ where
                 let src = if w_bit {
                     let byte_3 = stream_bytes.next().ok_or("missing byte 3 of reg->imm")?;
                     let imm_16 = build_u16(byte_3, byte_2);
-                    Src::Imm16 {
-                        imm: imm_16,
-                        show_specifier: false,
-                    }
+                    Src::Imm16 { imm: imm_16 }
                 } else {
-                    Src::Imm8 {
-                        imm: byte_2,
-                        show_specifier: false,
-                    }
+                    Src::Imm8 { imm: byte_2 }
                 };
 
                 Ok(Instruction::Mov { dst, src })
@@ -279,13 +287,9 @@ where
                     let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
                     Src::Imm16 {
                         imm: build_u16(data_high, data_low),
-                        show_specifier: true,
                     }
                 } else {
-                    Src::Imm8 {
-                        imm: data_low,
-                        show_specifier: true,
-                    }
+                    Src::Imm8 { imm: data_low }
                 };
 
                 Ok(Instruction::Mov { dst, src })
@@ -322,22 +326,15 @@ where
                     if s_bit {
                         Src::ImmSigned16 {
                             imm: (data_low as i8) as i16,
-                            show_specifier: true,
                         }
                     } else {
                         let data_high =
                             stream_bytes.next().ok_or("Missing data high of imm->reg")?;
                         let imm = build_u16(data_high, data_low);
-                        Src::Imm16 {
-                            imm,
-                            show_specifier: true,
-                        }
+                        Src::Imm16 { imm }
                     }
                 } else {
-                    Src::Imm8 {
-                        imm: data_low,
-                        show_specifier: true,
-                    }
+                    Src::Imm8 { imm: data_low }
                 };
 
                 eprintln!("{byte_1:#b}                  {byte_2:#b}");
