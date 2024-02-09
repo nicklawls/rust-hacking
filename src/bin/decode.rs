@@ -1,5 +1,5 @@
 use rustbook::decoder;
-use std::{convert::identity, env, fs, io};
+use std::{env, fs, io};
 
 fn main() -> io::Result<()> {
     let filename = env::args().nth(1).expect("file not found");
@@ -13,14 +13,15 @@ fn main() -> io::Result<()> {
     println!("bits 16");
     println!("");
 
-    for instruction in decoder::decode_instruction_stream(instruction_stream)
-        .map_or_else(
-            |(instructions, error)| {
-                eprintln!("{error:#?}");
-                instructions
-            },
-            identity,
-        )
+    let instructions = match decoder::decode_instruction_stream(instruction_stream) {
+        Ok(instructions) => instructions,
+        Err((instructions, error)) => {
+            eprintln!("{error:#?}");
+            instructions
+        }
+    };
+
+    for instruction in instructions
         .iter()
         .map(decoder::pp_asm)
         .collect::<Vec<String>>()
