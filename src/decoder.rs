@@ -16,24 +16,18 @@ pub enum Src {
 }
 
 #[derive(Debug)]
-pub enum Instruction {
-    /** Move Destination to Source */
-    Mov {
-        dst: Dst,
-        src: Src,
-    },
-    Add {
-        dst: Dst,
-        src: Src,
-    },
-    Sub {
-        dst: Dst,
-        src: Src,
-    },
-    Cmp {
-        dst: Dst,
-        src: Src,
-    },
+pub enum Op {
+    Mov,
+    Add,
+    Sub,
+    Cmp,
+}
+
+#[derive(Debug)]
+pub struct Instruction {
+    op: Op,
+    dst: Dst,
+    src: Src,
 }
 
 #[derive(Debug)]
@@ -135,42 +129,43 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         return format!("[{formula}]");
     }
 
-    fn pp_dst_src(dst: &Dst, src: &Src) -> String {
-        let dst_str = match dst {
-            Dst::Reg { reg: r } => pp_register(r),
-            Dst::Ea { ea } => pp_effective_address(ea),
-        };
+    let Instruction { op, dst, src } = instruction;
 
-        let dst_is_wide = match dst {
-            Dst::Ea { ea: _ } => true,
-            Dst::Reg { reg: _ } => false,
-        };
+    let dst_str = match dst {
+        Dst::Reg { reg: r } => pp_register(r),
+        Dst::Ea { ea } => pp_effective_address(ea),
+    };
 
-        let pp_imm_specifier = |is_word: bool, imm_str: &str| {
-            if dst_is_wide {
-                let specifier = if is_word { "word" } else { "byte" };
-                format!("{specifier} {imm_str}")
-            } else {
-                imm_str.to_owned()
-            }
-        };
+    let dst_is_wide = match dst {
+        Dst::Ea { ea: _ } => true,
+        Dst::Reg { reg: _ } => false,
+    };
 
-        let src_str = match src {
-            Src::Reg { reg: x } => pp_register(x),
-            Src::Imm8 { imm } => pp_imm_specifier(false, &imm.to_string()),
-            Src::Imm16 { imm } => pp_imm_specifier(true, &imm.to_string()),
-            Src::ImmSigned16 { imm } => pp_imm_specifier(true, &imm.to_string()),
-            Src::Ea { ea } => pp_effective_address(ea),
-        };
-        return format!("{dst_str}, {src_str}");
-    }
+    let pp_imm_specifier = |is_word: bool, imm_str: &str| {
+        if dst_is_wide {
+            let specifier = if is_word { "word" } else { "byte" };
+            format!("{specifier} {imm_str}")
+        } else {
+            imm_str.to_owned()
+        }
+    };
 
-    match instruction {
-        Instruction::Mov { dst, src } => ["mov", &pp_dst_src(dst, src)].join(" "),
-        Instruction::Add { dst, src } => ["add", &pp_dst_src(dst, src)].join(" "),
-        Instruction::Sub { dst, src } => ["sub", &pp_dst_src(dst, src)].join(" "),
-        Instruction::Cmp { dst, src } => ["cmp", &pp_dst_src(dst, src)].join(" "),
-    }
+    let src_str = match src {
+        Src::Reg { reg: x } => pp_register(x),
+        Src::Imm8 { imm } => pp_imm_specifier(false, &imm.to_string()),
+        Src::Imm16 { imm } => pp_imm_specifier(true, &imm.to_string()),
+        Src::ImmSigned16 { imm } => pp_imm_specifier(true, &imm.to_string()),
+        Src::Ea { ea } => pp_effective_address(ea),
+    };
+
+    let op_str = match op {
+        Op::Mov => "mov",
+        Op::Add => "add",
+        Op::Sub => "sub",
+        Op::Cmp => "cmp",
+    };
+
+    return format!("{op_str} {dst_str}, {src_str}");
 }
 
 pub fn decode_instruction_stream<I>(
@@ -215,11 +210,19 @@ where
                     Src::Imm8 { imm: byte_2 }
                 };
 
-                Ok(Instruction::Mov { dst, src })
+                Ok(Instruction {
+                    op: Op::Mov,
+                    dst,
+                    src,
+                })
             } else if opcode_6 == 0b100010 {
                 decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("MOV: {e}"))
-                    .map(|(dst, src)| Instruction::Mov { dst, src })
+                    .map(|(dst, src)| Instruction {
+                        op: Op::Mov,
+                        dst,
+                        src,
+                    })
             } else if opcode_6 == 0b101000 {
                 // MOV memory/accumulator
                 // These have two 7-bit rows in the manual, but the
@@ -238,7 +241,11 @@ where
                     (Dst::Reg { reg }, Src::Ea { ea: addr })
                 };
 
-                Ok(Instruction::Mov { dst, src })
+                Ok(Instruction {
+                    op: Op::Mov,
+                    dst,
+                    src,
+                })
             } else if opcode_7 == 0b1100011 {
                 let w_bit = extract_bit(byte_1, 1);
                 let byte_2 = stream_bytes.next().ok_or("missing byte 2 of imm->reg")?;
@@ -266,13 +273,21 @@ where
                     Src::Imm8 { imm: data_low }
                 };
 
-                Ok(Instruction::Mov { dst, src })
+                Ok(Instruction {
+                    op: Op::Mov,
+                    dst,
+                    src,
+                })
             }
             // ADD/SUB/CMP
             else if opcode_6 == 0b000000 {
                 decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("ADD: {e}"))
-                    .map(|(dst, src)| Instruction::Add { dst, src })
+                    .map(|(dst, src)| Instruction {
+                        op: Op::Add,
+                        dst,
+                        src,
+                    })
             } else if opcode_6 == 0b100000 {
                 let s_bit = extract_bit(byte_1, 2);
                 let w_bit = extract_bit(byte_1, 1);
@@ -311,15 +326,17 @@ where
                     Src::Imm8 { imm: data_low }
                 };
 
-                if opcode_extension == 0b000 {
-                    Ok(Instruction::Add { dst, src })
+                let op = if opcode_extension == 0b000 {
+                    Ok(Op::Add)
                 } else if opcode_extension == 0b101 {
-                    Ok(Instruction::Sub { dst, src })
+                    Ok(Op::Sub)
                 } else if opcode_extension == 0b111 {
-                    Ok(Instruction::Cmp { dst, src })
+                    Ok(Op::Cmp)
                 } else {
                     Err("unknown little opcode for imm -> reg/mem".to_string())
-                }
+                }?;
+
+                return Ok(Instruction { op, dst, src });
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
