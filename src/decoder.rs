@@ -146,29 +146,20 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             Dst::Reg { reg: _ } => false,
         };
 
+        let pp_imm_specifier = |is_word: bool, imm_str: &str| {
+            if dst_is_wide {
+                let specifier = if is_word { "word" } else { "byte" };
+                format!("{specifier} {imm_str}")
+            } else {
+                imm_str.to_owned()
+            }
+        };
+
         let src_str = match src {
             Src::Reg { reg: x } => pp_register(x),
-            Src::Imm8 { imm } => {
-                if dst_is_wide {
-                    format!("byte {imm}")
-                } else {
-                    imm.to_string()
-                }
-            }
-            Src::Imm16 { imm } => {
-                if dst_is_wide {
-                    format!("word {imm}")
-                } else {
-                    imm.to_string()
-                }
-            }
-            Src::ImmSigned16 { imm } => {
-                if dst_is_wide {
-                    format!("word {imm}")
-                } else {
-                    imm.to_string()
-                }
-            }
+            Src::Imm8 { imm } => pp_imm_specifier(false, &imm.to_string()),
+            Src::Imm16 { imm } => pp_imm_specifier(true, &imm.to_string()),
+            Src::ImmSigned16 { imm } => pp_imm_specifier(true, &imm.to_string()),
             Src::Ea { ea } => pp_effective_address(ea),
         };
         return format!("{dst_str}, {src_str}");
