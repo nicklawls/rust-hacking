@@ -143,24 +143,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
 
         let dst_is_wide = match dst {
             Dst::Ea { ea: _ } => true,
-            Dst::Reg { reg } => match reg {
-                Register::AL
-                | Register::BL
-                | Register::CL
-                | Register::DL
-                | Register::AH
-                | Register::BH
-                | Register::CH
-                | Register::DH => false,
-                Register::AX
-                | Register::BX
-                | Register::CX
-                | Register::DX
-                | Register::SP
-                | Register::BP
-                | Register::SI
-                | Register::DI => true,
-            },
+            Dst::Reg { reg: _ } => false,
         };
 
         let src_str = match src {
@@ -173,7 +156,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                 }
             }
             Src::Imm16 { imm } => {
-                if dst_is_wide && (*imm <= (u8::MAX as u16)) {
+                if dst_is_wide {
                     format!("word {imm}")
                 } else {
                     imm.to_string()

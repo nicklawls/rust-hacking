@@ -2,9 +2,9 @@ bits 16
 
 add bx, [bx + si]
 add bx, [bp]
-add si, word 2
-add bp, word 2
-add cx, word 8
+add si, 2
+add bp, 2
+add cx, 8
 add bx, [bp]
 add cx, [bx + 2]
 add bh, [bp + si + 4]

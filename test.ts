@@ -32,7 +32,10 @@ const outAsmFileName = `${binaryFileName}.out.asm`;
 await $`cargo run --bin decode -- ${binaryFileName} > ${outAsmFileName}`;
 
 // generate a .out file by running nasm on the .out.asm
-await $`nasm ${outAsmFileName}`;
+const reassembly = await $`nasm ${outAsmFileName}`;
+if (reassembly.exitCode) {
+  throw "failed to reassemble"
+}
 
 // diff the .out and the suffix-less file
 const outFileName = `${binaryFileName}.out`;
