@@ -320,9 +320,6 @@ where
                     Src::Imm8 { imm: data_low }
                 };
 
-                eprintln!("{byte_1:#b}                  {byte_2:#b}");
-                eprintln!("op:{opcode_6:#b} s:{s_bit} w:{w_bit} mod:{mod_field:#b} ext:{opcode_extension:#b} rm:{r_m_field:#b}");
-
                 if opcode_extension == 0b000 {
                     Ok(Instruction::Add { dst, src })
                 } else if opcode_extension == 0b101 {
