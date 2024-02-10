@@ -122,7 +122,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             EA::SI { disp } => pp_formula(vec![R::SI], disp.as_ref()),
             EA::DI { disp } => pp_formula(vec![R::DI], disp.as_ref()),
             EA::DirectAddress { disp: disp_16 } => disp_16.to_string(),
-            EA::BP { disp: some_disp } => pp_formula(vec![R::BP], Some(some_disp)),
+            EA::BP { disp } => pp_formula(vec![R::BP], Some(disp)),
             EA::BX { disp } => pp_formula(vec![R::BX], disp.as_ref()),
         };
 
