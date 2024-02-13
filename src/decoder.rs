@@ -234,7 +234,7 @@ where
                 let addr = EffectiveAddress::DirectAddress {
                     disp: build_u16(addr_hi, addr_lo),
                 };
-                let reg = if w_bit { Reg::AX } else { Reg::AL };
+                let reg = lookup_accumulator_reg(w_bit);
                 let (dst, src) = if d_bit {
                     (Dst::Ea { ea: addr }, Src::Reg { reg })
                 } else {
@@ -280,14 +280,33 @@ where
                 })
             }
             // ADD/SUB/CMP
-            else if opcode_6 == 0b000000 {
-                decode_reg_mod_rm(byte_1, &mut stream_bytes)
-                    .map_err(|e| format!("ADD: {e}"))
-                    .map(|(dst, src)| Instruction {
-                        op: Op::Add,
-                        dst,
-                        src,
-                    })
+            // 00 signals arithmetic (ish?)
+            // next three are opcode extension
+            // next tells you if reg/rm or accumulator
+            else if let (true, Ok(op)) = (
+                (byte_1 >> 6) == 0,
+                lookup_opcode_extension((byte_1 >> 3) & 0b00111),
+            ) {
+                if extract_bit(byte_1, 3) {
+                    let w_bit = extract_bit(byte_1, 1);
+                    let data_low = stream_bytes.next().ok_or("missing byte 2 of arith/accum")?;
+                    let dst = Dst::Reg {
+                        reg: lookup_accumulator_reg(w_bit),
+                    };
+                    let src = if w_bit {
+                        let data_high = stream_bytes.next().ok_or("missing byte 3 of arith/accum")?;
+                        Src::ImmSigned16 {
+                            imm: build_u16(data_high, data_low) as i16,
+                        }
+                    } else {
+                        Src::Imm8 { imm: data_low }
+                    };
+                    Ok(Instruction { op, dst, src })
+                } else {
+                    decode_reg_mod_rm(byte_1, &mut stream_bytes)
+                        .map_err(|e| format!("{op:#?}: {e}"))
+                        .map(|(dst, src)| Instruction { op, dst, src })
+                }
             } else if opcode_6 == 0b100000 {
                 let s_bit = extract_bit(byte_1, 2);
                 let w_bit = extract_bit(byte_1, 1);
@@ -326,15 +345,7 @@ where
                     Src::Imm8 { imm: data_low }
                 };
 
-                let op = if opcode_extension == 0b000 {
-                    Ok(Op::Add)
-                } else if opcode_extension == 0b101 {
-                    Ok(Op::Sub)
-                } else if opcode_extension == 0b111 {
-                    Ok(Op::Cmp)
-                } else {
-                    Err("unknown little opcode for imm -> reg/mem".to_string())
-                }?;
+                let op = lookup_opcode_extension(opcode_extension)?;
 
                 return Ok(Instruction { op, dst, src });
             } else {
@@ -349,6 +360,27 @@ where
     }
 
     return Ok(instructions);
+}
+
+fn lookup_accumulator_reg(w_bit: bool) -> Register {
+    if w_bit {
+        Reg::AX
+    } else {
+        Reg::AL
+    }
+}
+
+fn lookup_opcode_extension(opcode_extension: u8) -> Result<Op, String> {
+    let op = if opcode_extension == 0b000 {
+        Ok(Op::Add)
+    } else if opcode_extension == 0b101 {
+        Ok(Op::Sub)
+    } else if opcode_extension == 0b111 {
+        Ok(Op::Cmp)
+    } else {
+        Err("unknown little opcode for imm -> reg/mem".to_string())
+    }?;
+    Ok(op)
 }
 
 fn decode_reg_mod_rm<Bytes>(byte_1: u8, stream_bytes: &mut Bytes) -> Result<(Dst, Src), String>
