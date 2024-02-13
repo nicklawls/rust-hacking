@@ -24,3 +24,51 @@ add al, ah
 add ax, 1000
 add al, 226
 add al, 9
+sub bx, [bx + si]
+sub bx, [bp]
+sub si, 2
+sub bp, 2
+sub cx, 8
+sub bx, [bp]
+sub cx, [bx + 2]
+sub bh, [bp + si + 4]
+sub di, [bp + di + 6]
+sub [bx + si], bx
+sub [bp], bx
+sub [bp], bx
+sub [bx + 2], cx
+sub [bp + si + 4], bh
+sub [bp + di + 6], di
+sub [bx], byte 34
+sub [bx + di], word 29
+sub ax, [bp]
+sub al, [bx + si]
+sub ax, bx
+sub al, ah
+sub ax, 1000
+sub al, 226
+sub al, 9
+cmp bx, [bx + si]
+cmp bx, [bp]
+cmp si, 2
+cmp bp, 2
+cmp cx, 8
+cmp bx, [bp]
+cmp cx, [bx + 2]
+cmp bh, [bp + si + 4]
+cmp di, [bp + di + 6]
+cmp [bx + si], bx
+cmp [bp], bx
+cmp [bp], bx
+cmp [bx + 2], cx
+cmp [bp + si + 4], bh
+cmp [bp + di + 6], di
+cmp [bx], byte 34
+cmp [4834], word 29
+cmp ax, [bp]
+cmp al, [bx + si]
+cmp ax, bx
+cmp al, ah
+cmp ax, 1000
+cmp al, 226
+cmp al, 9
