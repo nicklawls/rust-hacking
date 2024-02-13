@@ -1,41 +1,39 @@
 import { $ } from "bun";
 
 // take in the filename of one of the hosted asm files
-const files = [
-  "listing_0037_single_register_mov.asm",
-  "listing_0038_many_register_mov.asm",
-  "listing_0039_more_movs.asm",
-  "listing_0040_challenge_movs.asm",
-  "listing_0041_add_sub_cmp_jnz.asm",
+const listingPrefixes = [
+  "listing_0037_single_register_mov",
+  "listing_0038_many_register_mov",
+  "listing_0039_more_movs",
+  "listing_0040_challenge_movs",
+  "listing_0041_add_sub_cmp_jnz",
 ];
 
-const testFile = async (asmFilename: string) => {
-  if (asmFilename.includes(".out.") || !asmFilename.endsWith(".asm")) {
-    throw "Not a source ASM file ".concat(asmFilename);
+Bun.$.cwd("listings");
+
+const testListing = async (listingPrefix: string) => {
+  if (!listingPrefix.startsWith("listing_0") || listingPrefix.includes(".")) {
+    throw "not a file prefix ".concat(listingPrefix);
   }
 
-  $.cwd("listings")
+  const asmFilename = `${listingPrefix}.asm`;
 
   const asmFile = Bun.file(asmFilename);
 
   if (!asmFile.exists()) {
     throw "File does not exist";
-    // TODO: if not found, download it
+    // TODO: if not found, download it and save it
   }
 
-  // assemble it, generating the suffix-less version
+  // assemble it, generating the prefix-only file
   await $`nasm ${asmFile}`;
 
-  // pass the suffix-less version into `cargo run --bin decode`, pipe the output to
+  // pass the prefix-only version into rust, pipe the output to
   // a .out.asm file
-  const binaryFileName = asmFilename.split(".asm")[0];
-  if (!binaryFileName) {
-    throw "bad binary filename ".concat(String(binaryFileName));
-  }
 
-  const outAsmFileName = `${binaryFileName}.out.asm`;
+  const outAsmFileName = `${listingPrefix}.out.asm`;
 
-  await $`cargo run --bin decode -- ${binaryFileName} > ${outAsmFileName}`;
+  await $`cargo run --bin decode -- ${listingPrefix} > ${outAsmFileName}`;
 
   // generate a .out file by running nasm on the .out.asm
   const reassembly = await $`nasm ${outAsmFileName}`;
@@ -44,8 +42,8 @@ const testFile = async (asmFilename: string) => {
   }
 
   // diff the .out and the suffix-less file
-  const outFileName = `${binaryFileName}.out`;
-  const { exitCode } = await $`diff ${binaryFileName} ${outFileName}`;
+  const outFileName = `${listingPrefix}.out`;
+  const { exitCode } = await $`diff ${listingPrefix} ${outFileName}`;
 
   if (exitCode === 0) {
     return "Success!";
@@ -56,9 +54,9 @@ const testFile = async (asmFilename: string) => {
 
 const result = Object.fromEntries(
   await Promise.all(
-    files.map(async (file) => [
-      file,
-      await testFile(file).catch((e) => ({ error: e })),
+    listingPrefixes.map(async (prefix) => [
+      prefix,
+      await testListing(prefix).catch((e) => ({ error: e })),
     ])
   )
 );
