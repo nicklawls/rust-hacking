@@ -1,3 +1,5 @@
+#!/usr/bin/env bun
+
 import { $ } from "bun";
 
 // take in the filename of one of the hosted asm files
@@ -9,7 +11,7 @@ const listingPrefixes = [
   "listing_0041_add_sub_cmp_jnz",
 ];
 
-Bun.$.cwd("listings");
+$.cwd("listings");
 
 const testListing = async (listingPrefix: string) => {
   if (!listingPrefix.startsWith("listing") || listingPrefix.includes(".")) {
@@ -43,6 +45,7 @@ const testListing = async (listingPrefix: string) => {
 
   // diff the .out and the suffix-less file
   const outFileName = `${listingPrefix}.out`;
+  // TODO: better diff with diff <(xxd foo) <(xxd bar)
   const { exitCode } = await $`diff ${listingPrefix} ${outFileName}`;
 
   if (exitCode === 0) {
