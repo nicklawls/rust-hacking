@@ -16,7 +16,7 @@ fn main() -> io::Result<()> {
     let instructions = match decoder::decode_instruction_stream(instruction_stream) {
         Ok(instructions) => instructions,
         Err((instructions, error)) => {
-            eprintln!("{error:#?}");
+            eprintln!("Stopped on error: {error:#?}");
             instructions
         }
     };

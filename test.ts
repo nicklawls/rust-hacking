@@ -14,6 +14,8 @@ const testFile = async (asmFilename: string) => {
     throw "Not a source ASM file ".concat(asmFilename);
   }
 
+  $.cwd("listings")
+
   const asmFile = Bun.file(asmFilename);
 
   if (!asmFile.exists()) {
@@ -46,8 +48,19 @@ const testFile = async (asmFilename: string) => {
   const { exitCode } = await $`diff ${binaryFileName} ${outFileName}`;
 
   if (exitCode === 0) {
-    console.log({ [asmFilename]: "Success!" });
+    return "Success!";
   }
+
+  return { exitCode };
 };
 
-await Promise.all(files.map(testFile));
+const result = Object.fromEntries(
+  await Promise.all(
+    files.map(async (file) => [
+      file,
+      await testFile(file).catch((e) => ({ error: e })),
+    ])
+  )
+);
+
+console.log(result);
