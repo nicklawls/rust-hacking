@@ -200,15 +200,7 @@ where
                     reg: decode_register(reg_field, w_bit)?,
                 };
 
-                let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg->imm")?;
-
-                let src = if w_bit {
-                    let byte_3 = stream_bytes.next().ok_or("missing byte 3 of reg->imm")?;
-                    let imm_16 = build_u16(byte_3, byte_2);
-                    Src::Imm16 { imm: imm_16 }
-                } else {
-                    Src::Imm8 { imm: byte_2 }
-                };
+                let src = decode_immediate(w_bit, &mut stream_bytes)?;
 
                 Ok(Instruction {
                     op: Op::Mov,
@@ -262,16 +254,7 @@ where
                     ea: decode_effective_address(mod_field, r_m_field, &mut stream_bytes)?,
                 };
 
-                let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
-
-                let src = if w_bit {
-                    let data_high = stream_bytes.next().ok_or("Missing byte 4 of imm->reg")?;
-                    Src::Imm16 {
-                        imm: build_u16(data_high, data_low),
-                    }
-                } else {
-                    Src::Imm8 { imm: data_low }
-                };
+                let src = decode_immediate(w_bit, &mut stream_bytes)?;
 
                 Ok(Instruction {
                     op: Op::Mov,
@@ -289,18 +272,10 @@ where
             ) {
                 if extract_bit(byte_1, 3) {
                     let w_bit = extract_bit(byte_1, 1);
-                    let data_low = stream_bytes.next().ok_or("missing byte 2 of arith/accum")?;
                     let dst = Dst::Reg {
                         reg: lookup_accumulator_reg(w_bit),
                     };
-                    let src = if w_bit {
-                        let data_high = stream_bytes.next().ok_or("missing byte 3 of arith/accum")?;
-                        Src::ImmSigned16 {
-                            imm: build_u16(data_high, data_low) as i16,
-                        }
-                    } else {
-                        Src::Imm8 { imm: data_low }
-                    };
+                    let src = decode_immediate(w_bit, &mut stream_bytes)?;
                     Ok(Instruction { op, dst, src })
                 } else {
                     decode_reg_mod_rm(byte_1, &mut stream_bytes)
@@ -360,6 +335,20 @@ where
     }
 
     return Ok(instructions);
+}
+
+fn decode_immediate<Bytes>(w_bit: bool, stream_bytes: &mut Bytes) -> Result<Src, String>
+where
+    Bytes: Iterator<Item = u8>,
+{
+    let data_low = stream_bytes.next().ok_or("Missing byte 3 of imm->reg")?;
+    Ok(if w_bit {
+        let data_high = stream_bytes.next().ok_or("missing byte 3 of reg->imm")?;
+        let imm_16 = build_u16(data_high, data_low);
+        Src::Imm16 { imm: imm_16 }
+    } else {
+        Src::Imm8 { imm: data_low }
+    })
 }
 
 fn lookup_accumulator_reg(w_bit: bool) -> Register {
