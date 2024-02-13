@@ -226,7 +226,7 @@ where
                 let addr = EffectiveAddress::DirectAddress {
                     disp: build_u16(addr_hi, addr_lo),
                 };
-                let reg = lookup_accumulator_reg(w_bit);
+                let reg = decode_accumulator_reg(w_bit);
                 let (dst, src) = if d_bit {
                     (Dst::Ea { ea: addr }, Src::Reg { reg })
                 } else {
@@ -268,12 +268,12 @@ where
             // next tells you if reg/rm or accumulator
             else if let (true, Ok(op)) = (
                 (byte_1 >> 6) == 0,
-                lookup_opcode_extension((byte_1 >> 3) & 0b00111),
+                decode_opcode_extension((byte_1 >> 3) & 0b00111),
             ) {
                 if extract_bit(byte_1, 3) {
                     let w_bit = extract_bit(byte_1, 1);
                     let dst = Dst::Reg {
-                        reg: lookup_accumulator_reg(w_bit),
+                        reg: decode_accumulator_reg(w_bit),
                     };
                     let src = decode_immediate(w_bit, &mut stream_bytes)?;
                     Ok(Instruction { op, dst, src })
@@ -320,7 +320,7 @@ where
                     Src::Imm8 { imm: data_low }
                 };
 
-                let op = lookup_opcode_extension(opcode_extension)?;
+                let op = decode_opcode_extension(opcode_extension)?;
 
                 return Ok(Instruction { op, dst, src });
             } else {
@@ -351,7 +351,7 @@ where
     })
 }
 
-fn lookup_accumulator_reg(w_bit: bool) -> Register {
+fn decode_accumulator_reg(w_bit: bool) -> Register {
     if w_bit {
         Reg::AX
     } else {
@@ -359,7 +359,7 @@ fn lookup_accumulator_reg(w_bit: bool) -> Register {
     }
 }
 
-fn lookup_opcode_extension(opcode_extension: u8) -> Result<Op, String> {
+fn decode_opcode_extension(opcode_extension: u8) -> Result<Op, String> {
     let op = if opcode_extension == 0b000 {
         Ok(Op::Add)
     } else if opcode_extension == 0b101 {
