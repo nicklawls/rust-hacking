@@ -12,8 +12,8 @@ const listingPrefixes = [
 Bun.$.cwd("listings");
 
 const testListing = async (listingPrefix: string) => {
-  if (!listingPrefix.startsWith("listing_0") || listingPrefix.includes(".")) {
-    throw "not a file prefix ".concat(listingPrefix);
+  if (!listingPrefix.startsWith("listing") || listingPrefix.includes(".")) {
+    throw "Bad file prefix";
   }
 
   const asmFilename = `${listingPrefix}.asm`;
@@ -38,7 +38,7 @@ const testListing = async (listingPrefix: string) => {
   // generate a .out file by running nasm on the .out.asm
   const reassembly = await $`nasm ${outAsmFileName}`;
   if (reassembly.exitCode) {
-    throw "failed to reassemble";
+    throw "Failed to reassemble";
   }
 
   // diff the .out and the suffix-less file
