@@ -22,7 +22,6 @@ fn main() -> io::Result<()> {
             Ok(instruction) => println!("{}", decoder::pp_asm(&instruction)),
             Err(error) => {
                 eprintln!("Stopped on error: {error:#?}");
-                break;
             }
         }
     }
