@@ -184,7 +184,7 @@ where
             let opcode_7 = byte_1 >> 1;
 
             if opcode_4 == 0b1011 {
-                let w_bit = extract_bit(byte_1, 4);
+                let w_bit = extract_bit(byte_1, 3);
                 let reg_field = byte_1 & 0b00000111;
                 let dst = Dst::Reg {
                     reg: decode_register(reg_field, w_bit)?,
@@ -209,8 +209,8 @@ where
                 // MOV memory/accumulator
                 // These have two 7-bit rows in the manual, but the
                 // D bit has a semantic, deciding if mem is destination
-                let d_bit = extract_bit(byte_1, 2);
-                let w_bit = extract_bit(byte_1, 1);
+                let d_bit = extract_bit(byte_1, 1);
+                let w_bit = extract_bit(byte_1, 0);
                 let addr_lo = stream_bytes.next().ok_or("mem/acc addr_low")?;
                 let addr_hi = stream_bytes.next().ok_or("mem/acc addr_hi")?;
                 let addr = EffectiveAddress::DirectAddress {
@@ -229,7 +229,7 @@ where
                     src,
                 })
             } else if opcode_7 == 0b1100011 {
-                let w_bit = extract_bit(byte_1, 1);
+                let w_bit = extract_bit(byte_1, 0);
                 let byte_2 = stream_bytes.next().ok_or("missing byte 2 of imm->reg")?;
                 let mod_field = extract_std_mod(byte_2);
                 let reg_field = extract_std_reg(byte_2); // always 000, unused
@@ -260,8 +260,8 @@ where
                 (byte_1 >> 6) == 0,
                 decode_opcode_extension((byte_1 >> 3) & 0b00111),
             ) {
-                if extract_bit(byte_1, 3) {
-                    let w_bit = extract_bit(byte_1, 1);
+                if extract_bit(byte_1, 2) {
+                    let w_bit = extract_bit(byte_1, 0);
                     let dst = Dst::Reg {
                         reg: decode_accumulator_reg(w_bit),
                     };
@@ -273,8 +273,8 @@ where
                         .map(|(dst, src)| Instruction { op, dst, src })
                 }
             } else if opcode_6 == 0b100000 {
-                let s_bit = extract_bit(byte_1, 2);
-                let w_bit = extract_bit(byte_1, 1);
+                let s_bit = extract_bit(byte_1, 1);
+                let w_bit = extract_bit(byte_1, 0);
                 let byte_2 = stream_bytes
                     .next()
                     .ok_or("missing byte 2 of add/cmp/sub imm->reg")?;
@@ -367,8 +367,8 @@ where
     Bytes: Iterator<Item = u8>,
 {
     // various MOVs
-    let d_bit = extract_bit(byte_1, 2);
-    let w_bit = extract_bit(byte_1, 1);
+    let d_bit = extract_bit(byte_1, 1);
+    let w_bit = extract_bit(byte_1, 0);
     let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg-mod-rm")?;
     let mod_field = extract_std_mod(byte_2);
     let reg_field = extract_std_reg(byte_2);
@@ -513,9 +513,9 @@ fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
         .ok_or("missing register".to_string());
 }
 
-/// 1-based indexing for some reason
-fn extract_bit(byte: u8, nth_bit: u32) -> bool {
-    (byte.wrapping_shr(nth_bit - 1) & 0b00000001) != 0
+/// [7 6 5 4 3 2 1 0]
+fn extract_bit(byte: u8, nth_bit: u8) -> bool {
+    ((byte >> nth_bit) & 0b00000001) != 0
 }
 
 fn extract_std_mod(byte: u8) -> u8 {
