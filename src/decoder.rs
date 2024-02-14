@@ -175,9 +175,12 @@ where
     I: IntoIterator<Item = u8>,
 {
     let mut stream_bytes = instruction_stream.into_iter();
+    let mut last_was_err = false;
 
     return std::iter::from_fn(move || {
-        // TODO: kill the stream when Err is hit
+        if last_was_err {
+            return None;
+        }
         let next = stream_bytes.next();
         next.map(|byte_1| -> Result<Instruction, String> {
             let opcode_4 = byte_1 >> 4;
@@ -317,6 +320,12 @@ where
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
+        })
+        .map(|res| {
+            if res.is_err() {
+                last_was_err = true
+            }
+            res
         })
     });
 }
