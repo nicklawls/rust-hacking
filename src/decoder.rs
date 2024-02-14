@@ -170,25 +170,16 @@ pub fn pp_asm(instruction: &Instruction) -> String {
 
 pub fn decode_instruction_stream<I>(
     instruction_stream: I,
-) -> Result<Vec<Instruction>, (Vec<Instruction>, String)>
+) -> impl Iterator<Item = Result<Instruction, String>>
 where
     I: IntoIterator<Item = u8>,
 {
-    let mut instructions: Vec<Instruction> = vec![];
     let mut stream_bytes = instruction_stream.into_iter();
 
-    while let Some(byte_1) = stream_bytes.next() {
-        // Split this up int two phases for clarity and exhaustiveness
-        // 1. calculate the next instruction or error, consuming from the
-        //    iterator as needed
-        // 2. If success, accumulate in `instruction`, else return with error
-
-        // If we want to use ? to compose Results, step 1 can't be just a value
-        // binding, because ? expands errors into a `return` to the next
-        // function context. So instead, use an IIFE.
-
-        // closure because I'm too lazy to type out parameters
-        let next_instruction = (|| -> Result<Instruction, String> {
+    return std::iter::from_fn(move || {
+        // TODO: kill the stream when Err is hit
+        let next = stream_bytes.next();
+        next.map(|byte_1| -> Result<Instruction, String> {
             let opcode_4 = byte_1 >> 4;
             let opcode_6 = byte_1 >> 2;
             let opcode_7 = byte_1 >> 1;
@@ -326,15 +317,8 @@ where
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
-        })();
-
-        match next_instruction {
-            Ok(instruction) => instructions.push(instruction),
-            Err(e) => return Err((instructions, e)),
-        };
-    }
-
-    return Ok(instructions);
+        })
+    });
 }
 
 fn decode_immediate<Bytes>(w_bit: bool, stream_bytes: &mut Bytes) -> Result<Src, String>

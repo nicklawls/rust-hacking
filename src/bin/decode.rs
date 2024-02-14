@@ -13,18 +13,18 @@ fn main() -> io::Result<()> {
         // too eagerly.
         .map(|x| x.expect("oops"));
 
-    let instructions = match decoder::decode_instruction_stream(instruction_stream) {
-        Ok(instructions) => instructions,
-        Err((instructions, error)) => {
-            eprintln!("Stopped on error: {error:#?}");
-            instructions
-        }
-    };
+    let instructions = decoder::decode_instruction_stream(instruction_stream);
 
     println!("bits 16");
     println!("");
     for instruction in instructions {
-        println!("{}", decoder::pp_asm(&instruction));
+        match instruction {
+            Ok(instruction) => println!("{}", decoder::pp_asm(&instruction)),
+            Err(error) => {
+                eprintln!("Stopped on error: {error:#?}");
+                break;
+            }
+        }
     }
     Ok(())
 }
