@@ -11,6 +11,8 @@ const listingPrefixes = [
   "listing_0041_add_sub_cmp_jnz",
 ];
 
+const buildPromise = $`cargo build --bin decode`;
+
 $.cwd("listings");
 
 const testListing = async (listingPrefix: string) => {
@@ -35,7 +37,9 @@ const testListing = async (listingPrefix: string) => {
 
   const outAsmFileName = `${listingPrefix}.out.asm`;
 
-  await $`cargo run --bin decode -- ${listingPrefix} > ${outAsmFileName}`;
+  await buildPromise;
+
+  await $`../target/debug/decode ${listingPrefix} > ${outAsmFileName}`;
 
   // generate a .out file by running nasm on the .out.asm
   const reassembly = await $`nasm ${outAsmFileName}`;
