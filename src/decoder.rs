@@ -415,6 +415,7 @@ where
     Bytes: Iterator<Item = u8>,
 {
     let formulae = HashMap::from(FORMULAE);
+    type EA = EffectiveAddress;
 
     // while these look structurally similar, notice how ? is inside the `else if`
     // in the first case, while outside in the second. And consider that those
@@ -465,18 +466,18 @@ where
     }
 }
 
-/// Constructor for effective addresses
-type Formula = fn(Option<Displacement>) -> EffectiveAddress;
-type EA = EffectiveAddress;
-const FORMULAE: [(u8, Formula); 7] = [
-    (0b000, |disp| EA::BxSi { disp }),
-    (0b001, |disp| EA::BxDi { disp }),
-    (0b010, |disp| EA::BpSi { disp }),
-    (0b011, |disp| EA::BpDi { disp }),
-    (0b100, |disp| EA::SI { disp }),
-    (0b101, |disp| EA::DI { disp }),
-    (0b111, |disp| EA::BX { disp }),
-];
+const FORMULAE: [(u8, fn(Option<Displacement>) -> EffectiveAddress); 7] = {
+    type EA = EffectiveAddress;
+    [
+        (0b000, |disp| EA::BxSi { disp }),
+        (0b001, |disp| EA::BxDi { disp }),
+        (0b010, |disp| EA::BpSi { disp }),
+        (0b011, |disp| EA::BpDi { disp }),
+        (0b100, |disp| EA::SI { disp }),
+        (0b101, |disp| EA::DI { disp }),
+        (0b111, |disp| EA::BX { disp }),
+    ]
+};
 
 /// In this ISA, later-coming bytes are the hight bytes
 fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
