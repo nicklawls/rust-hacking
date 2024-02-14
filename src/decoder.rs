@@ -258,7 +258,7 @@ where
             // next tells you if reg/rm or accumulator
             else if let (true, Ok(op)) = (
                 (byte_1 >> 6) == 0,
-                decode_opcode_extension((byte_1 >> 3) & 0b00111),
+                decode_opcode_extension(extract_bits(byte_1, 2, 3)),
             ) {
                 if extract_bit(byte_1, 2) {
                     let w_bit = extract_bit(byte_1, 0);
@@ -279,7 +279,7 @@ where
                     .next()
                     .ok_or("missing byte 2 of add/cmp/sub imm->reg")?;
                 let mod_field = extract_std_mod(byte_2);
-                let opcode_extension = (byte_2 & 0b00111000) >> 3;
+                let opcode_extension = extract_bits(byte_2, 2, 3);
                 let r_m_field = extract_std_r_m(byte_2);
 
                 // WARN: this must appear first! it mutates stream_bytes.
@@ -518,6 +518,13 @@ fn extract_bit(byte: u8, nth_bit: u8) -> bool {
     ((byte >> nth_bit) & 0b00000001) != 0
 }
 
+/// First `drop` bits, then `take` from the remainder.
+/// Left-to-right action.
+/// Useful when bits are in the middle.
+fn extract_bits(byte: u8, drop: u8, take: u8) -> u8 {
+    (byte << drop) >> (8 - take)
+}
+
 fn extract_std_mod(byte: u8) -> u8 {
     byte >> 6
 }
@@ -527,5 +534,5 @@ fn extract_std_r_m(byte: u8) -> u8 {
 }
 
 fn extract_std_reg(byte: u8) -> u8 {
-    (byte & 0b00111000) >> 3
+    extract_bits(byte, 2, 3)
 }
