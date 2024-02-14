@@ -231,13 +231,13 @@ where
             } else if opcode_7 == 0b1100011 {
                 let w_bit = extract_bit(byte_1, 1);
                 let byte_2 = stream_bytes.next().ok_or("missing byte 2 of imm->reg")?;
-                let mod_field = byte_2 >> 6;
-                let reg_field = (byte_2 & 0b00111000) >> 3; // always 000, unused
+                let mod_field = extract_std_mod(byte_2);
+                let reg_field = extract_std_reg(byte_2); // always 000, unused
                 if reg_field != 0b000 {
                     return Err("mem->reg: reg field not 0b000".to_string());
                 };
 
-                let r_m_field = byte_2 & 0b00000111;
+                let r_m_field = extract_std_r_m(byte_2);
 
                 // WARN: this must appear first! it mutates stream_bytes.
                 let dst = Dst::Ea {
@@ -278,10 +278,9 @@ where
                 let byte_2 = stream_bytes
                     .next()
                     .ok_or("missing byte 2 of add/cmp/sub imm->reg")?;
-                let mod_field = byte_2 >> 6;
+                let mod_field = extract_std_mod(byte_2);
                 let opcode_extension = (byte_2 & 0b00111000) >> 3;
-
-                let r_m_field = byte_2 & 0b00000111;
+                let r_m_field = extract_std_r_m(byte_2);
 
                 // WARN: this must appear first! it mutates stream_bytes.
                 let dst = if mod_field == 0b11 {
@@ -372,9 +371,9 @@ where
     let d_bit = extract_bit(byte_1, 2);
     let w_bit = extract_bit(byte_1, 1);
     let byte_2 = stream_bytes.next().ok_or("missing byte 2 of reg-mod-rm")?;
-    let mod_field = byte_2 >> 6;
-    let reg_field = (byte_2 & 0b00111000) >> 3;
-    let r_m_field = byte_2 & 0b00000111;
+    let mod_field = extract_std_mod(byte_2);
+    let reg_field = extract_std_reg(byte_2);
+    let r_m_field = extract_std_r_m(byte_2);
 
     let reg_register = decode_register(reg_field, w_bit)?;
 
@@ -518,4 +517,16 @@ fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
 /// 1-based indexing for some reason
 fn extract_bit(byte: u8, nth_bit: u32) -> bool {
     (byte.wrapping_shr(nth_bit - 1) & 0b00000001) != 0
+}
+
+fn extract_std_mod(byte: u8) -> u8 {
+    byte >> 6
+}
+
+fn extract_std_r_m(byte: u8) -> u8 {
+    byte & 0b00000111
+}
+
+fn extract_std_reg(byte: u8) -> u8 {
+    (byte & 0b00111000) >> 3
 }
