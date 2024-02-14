@@ -351,16 +351,15 @@ fn decode_accumulator_reg(w_bit: bool) -> Register {
 }
 
 fn decode_opcode_extension(opcode_extension: u8) -> Result<Op, String> {
-    let op = if opcode_extension == 0b000 {
+    if opcode_extension == 0b000 {
         Ok(Op::Add)
     } else if opcode_extension == 0b101 {
         Ok(Op::Sub)
     } else if opcode_extension == 0b111 {
         Ok(Op::Cmp)
     } else {
-        Err("unknown little opcode for imm -> reg/mem".to_string())
-    }?;
-    Ok(op)
+        Err(format!("Unknown opcode extension: {opcode_extension:#b}"))
+    }
 }
 
 fn decode_reg_mod_rm<Bytes>(byte_1: u8, stream_bytes: &mut Bytes) -> Result<(Dst, Src), String>
