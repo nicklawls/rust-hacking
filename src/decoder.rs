@@ -23,6 +23,11 @@ pub enum Op {
     Cmp,
 }
 
+// TODO: This needs to change to support conditional jumps
+// - another enum layer (brittle!)
+// - something with traits (ew)
+// - A _vector_ of Op | Src | Dst | JumpOffset, offload shape detection to printer
+// - Sim to above, make each field except Op optional
 #[derive(Debug)]
 pub struct Instruction {
     op: Op,
@@ -30,16 +35,11 @@ pub struct Instruction {
     src: Src,
 }
 
-#[derive(Debug)]
-
 /// "If the displacement is only a single byte, the 8086 or 8088 automatically
 /// sign-extends this quantity to 16-bits before using the information in
 /// further address calculations"
 /// implying that displacements are kind of always signed after decoding
-pub enum Displacement {
-    D8 { d8: i16 },
-    D16 { d16: i16 },
-}
+type Displacement = i16;
 
 #[derive(Debug)]
 pub enum EffectiveAddress {
@@ -89,26 +89,19 @@ pub fn pp_asm(instruction: &Instruction) -> String {
 
     fn pp_effective_address(ea: &EffectiveAddress) -> String {
         fn pp_formula(registers: Vec<Register>, displacement: Option<&Displacement>) -> String {
-            let mut reg_str = registers
+            let reg_str = registers
                 .iter()
                 .map(pp_register)
                 .collect::<Vec<_>>()
                 .join(" + ");
 
             match displacement {
-                Some(Displacement::D8 { d8: disp } | Displacement::D16 { d16: disp }) => {
-                    if disp.is_positive() {
-                        reg_str.push_str(format!(" + {disp}").as_str())
-                    }
-
-                    if disp.is_negative() {
-                        reg_str.push_str(format!(" - {}", disp.abs()).as_str())
-                    }
+                Some(disp) if *disp != 0 => {
+                    let sign = if disp.is_positive() { "+" } else { "-" };
+                    format!("{reg_str} {sign} {}", disp.abs())
                 }
-                None => {}
-            };
-
-            return reg_str;
+                _ => reg_str,
+            }
         }
 
         type R = Register;
@@ -126,7 +119,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
             EA::BX { disp } => pp_formula(vec![R::BX], disp.as_ref()),
         };
 
-        return format!("[{formula}]");
+        format!("[{formula}]")
     }
 
     let Instruction { op, dst, src } = instruction;
@@ -434,9 +427,7 @@ where
         }
         0b01 => {
             let byte_3 = stream_bytes.next().ok_or("MOD=01 byte 3")?;
-            let d = Displacement::D8 {
-                d8: byte_3 as i8 as i16,
-            };
+            let d = byte_3 as i8 as i16;
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
             } else if r_m_field == 0b110 {
@@ -448,9 +439,7 @@ where
         0b10 => {
             let byte_3 = stream_bytes.next().ok_or("MOD=11 byte 3")?;
             let byte_4 = stream_bytes.next().ok_or("MOD=11 byte 4")?;
-            let d = Displacement::D16 {
-                d16: build_u16(byte_4, byte_3) as i16,
-            };
+            let d = build_u16(byte_4, byte_3) as i16;
             if let Some(formula) = formulae.get(&r_m_field) {
                 Ok(formula(Some(d)))
             } else if r_m_field == 0b110 {
@@ -478,8 +467,8 @@ const FORMULAE: [(u8, fn(Option<Displacement>) -> EffectiveAddress); 7] = {
 };
 
 /// In this ISA, later-coming bytes are the hight bytes
-fn build_u16(high_byte: u8, low_byte: u8) -> u16 {
-    ((high_byte as u16) << 8) | (low_byte as u16)
+fn build_u16(later_byte: u8, earlier_byte: u8) -> u16 {
+    ((later_byte as u16) << 8) | (earlier_byte as u16)
 }
 
 type Reg = Register;
