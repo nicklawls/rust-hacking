@@ -16,23 +16,42 @@ pub enum Src {
 }
 
 #[derive(Debug)]
-pub enum Op {
+pub enum DstSrcOp {
     Mov,
     Add,
     Sub,
     Cmp,
 }
+#[derive(Debug, Clone, Copy)]
+pub enum CJmpOp {
+    Je,
+    Jl,
+    Jle,
+    Jb,
+    Jbe,
+    Jp,
+    Jo,
+    Js,
+    Jne,
+    Jnl,
+    Jnle,
+    Jnb,
+    Jnbe,
+    Jnp,
+    Jno,
+    Jns,
+    Loop,
+    Loopz,
+    Loopnz,
+    Jcxz,
+}
 
-// TODO: This needs to change to support conditional jumps
-// - another enum layer (brittle!)
-// - something with traits (ew)
-// - A _vector_ of Op | Src | Dst | JumpOffset, offload shape detection to printer
-// - Sim to above, make each field except Op optional
+type IpInc8 = i8;
+
 #[derive(Debug)]
-pub struct Instruction {
-    op: Op,
-    dst: Dst,
-    src: Src,
+pub enum Instruction {
+    DstSrc { op: DstSrcOp, dst: Dst, src: Src },
+    CJmp { op: CJmpOp, inc: IpInc8 },
 }
 
 /// "If the displacement is only a single byte, the 8086 or 8088 automatically
@@ -122,43 +141,52 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         format!("[{formula}]")
     }
 
-    let Instruction { op, dst, src } = instruction;
+    match instruction {
+        Instruction::DstSrc { op, dst, src } => {
+            let dst_str = match dst {
+                Dst::Reg { reg: r } => pp_register(r),
+                Dst::Ea { ea } => pp_effective_address(ea),
+            };
 
-    let dst_str = match dst {
-        Dst::Reg { reg: r } => pp_register(r),
-        Dst::Ea { ea } => pp_effective_address(ea),
-    };
+            let dst_is_wide = match dst {
+                Dst::Ea { ea: _ } => true,
+                Dst::Reg { reg: _ } => false,
+            };
 
-    let dst_is_wide = match dst {
-        Dst::Ea { ea: _ } => true,
-        Dst::Reg { reg: _ } => false,
-    };
+            let pp_imm_specifier = |is_word: bool, imm_str: &str| {
+                if dst_is_wide {
+                    let specifier = if is_word { "word" } else { "byte" };
+                    format!("{specifier} {imm_str}")
+                } else {
+                    imm_str.to_owned()
+                }
+            };
 
-    let pp_imm_specifier = |is_word: bool, imm_str: &str| {
-        if dst_is_wide {
-            let specifier = if is_word { "word" } else { "byte" };
-            format!("{specifier} {imm_str}")
-        } else {
-            imm_str.to_owned()
+            let src_str = match src {
+                Src::Reg { reg: x } => pp_register(x),
+                Src::Imm8 { imm } => pp_imm_specifier(false, &imm.to_string()),
+                Src::Imm16 { imm } => pp_imm_specifier(true, &imm.to_string()),
+                Src::ImmSigned16 { imm } => pp_imm_specifier(true, &imm.to_string()),
+                Src::Ea { ea } => pp_effective_address(ea),
+            };
+
+            let op_str = match op {
+                DstSrcOp::Mov => "mov",
+                DstSrcOp::Add => "add",
+                DstSrcOp::Sub => "sub",
+                DstSrcOp::Cmp => "cmp",
+            };
+
+            format!("{op_str} {dst_str}, {src_str}")
         }
-    };
-
-    let src_str = match src {
-        Src::Reg { reg: x } => pp_register(x),
-        Src::Imm8 { imm } => pp_imm_specifier(false, &imm.to_string()),
-        Src::Imm16 { imm } => pp_imm_specifier(true, &imm.to_string()),
-        Src::ImmSigned16 { imm } => pp_imm_specifier(true, &imm.to_string()),
-        Src::Ea { ea } => pp_effective_address(ea),
-    };
-
-    let op_str = match op {
-        Op::Mov => "mov",
-        Op::Add => "add",
-        Op::Sub => "sub",
-        Op::Cmp => "cmp",
-    };
-
-    format!("{op_str} {dst_str}, {src_str}")
+        Instruction::CJmp { op, inc } => {
+            let op_str = format!("{op:?}").to_ascii_lowercase();
+            // Keep an eye on this 2, it has to do with the fact that jumps are
+            // relative to the next instruction, i.e. 2 bytes away.
+            let inc_str = format!("$+2{inc:+}");
+            format!("{op_str} {inc_str}")
+        }
+    }
 }
 
 pub fn decode_instruction_stream<I>(
@@ -185,16 +213,16 @@ where
 
                 let src = decode_immediate(w_bit, &mut stream_bytes)?;
 
-                Ok(Instruction {
-                    op: Op::Mov,
+                Ok(Instruction::DstSrc {
+                    op: DstSrcOp::Mov,
                     dst,
                     src,
                 })
             } else if opcode_6 == 0b100010 {
                 decode_reg_mod_rm(byte_1, &mut stream_bytes)
                     .map_err(|e| format!("MOV: {e}"))
-                    .map(|(dst, src)| Instruction {
-                        op: Op::Mov,
+                    .map(|(dst, src)| Instruction::DstSrc {
+                        op: DstSrcOp::Mov,
                         dst,
                         src,
                     })
@@ -216,8 +244,8 @@ where
                     (Dst::Reg { reg }, Src::Ea { ea: addr })
                 };
 
-                Ok(Instruction {
-                    op: Op::Mov,
+                Ok(Instruction::DstSrc {
+                    op: DstSrcOp::Mov,
                     dst,
                     src,
                 })
@@ -239,8 +267,8 @@ where
 
                 let src = decode_immediate(w_bit, &mut stream_bytes)?;
 
-                Ok(Instruction {
-                    op: Op::Mov,
+                Ok(Instruction::DstSrc {
+                    op: DstSrcOp::Mov,
                     dst,
                     src,
                 })
@@ -259,11 +287,11 @@ where
                         reg: decode_accumulator_reg(w_bit),
                     };
                     let src = decode_immediate(w_bit, &mut stream_bytes)?;
-                    Ok(Instruction { op, dst, src })
+                    Ok(Instruction::DstSrc { op, dst, src })
                 } else {
                     decode_reg_mod_rm(byte_1, &mut stream_bytes)
                         .map_err(|e| format!("{op:#?}: {e}"))
-                        .map(|(dst, src)| Instruction { op, dst, src })
+                        .map(|(dst, src)| Instruction::DstSrc { op, dst, src })
                 }
             } else if opcode_6 == 0b100000 {
                 let s_bit = extract_bit(byte_1, 1);
@@ -304,7 +332,13 @@ where
 
                 let op = decode_opcode_extension(opcode_extension)?;
 
-                Ok(Instruction { op, dst, src })
+                Ok(Instruction::DstSrc { op, dst, src })
+            } else if let Some(op) = decode_cjmp_op(byte_1) {
+                let byte_2 = stream_bytes.next().ok_or("Missing byte 2 of cjmp")?;
+                Ok(Instruction::CJmp {
+                    op,
+                    inc: byte_2 as i8,
+                })
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
@@ -343,13 +377,13 @@ fn decode_accumulator_reg(w_bit: bool) -> Register {
     }
 }
 
-fn decode_opcode_extension(opcode_extension: u8) -> Result<Op, String> {
+fn decode_opcode_extension(opcode_extension: u8) -> Result<DstSrcOp, String> {
     if opcode_extension == 0b000 {
-        Ok(Op::Add)
+        Ok(DstSrcOp::Add)
     } else if opcode_extension == 0b101 {
-        Ok(Op::Sub)
+        Ok(DstSrcOp::Sub)
     } else if opcode_extension == 0b111 {
-        Ok(Op::Cmp)
+        Ok(DstSrcOp::Cmp)
     } else {
         Err(format!("Unknown opcode extension: {opcode_extension:#b}"))
     }
@@ -466,10 +500,36 @@ const FORMULAE: [(u8, fn(Option<Displacement>) -> EffectiveAddress); 7] = {
     ]
 };
 
-/// In this ISA, later-coming bytes are the hight bytes
-fn build_u16(later_byte: u8, earlier_byte: u8) -> u16 {
-    ((later_byte as u16) << 8) | (earlier_byte as u16)
+fn decode_cjmp_op(opcode: u8) -> Option<CJmpOp> {
+    let opcode_map = HashMap::from(CJMP_OPCODES);
+    opcode_map.get(&opcode).map(|x| *x)
 }
+
+const CJMP_OPCODES: [(u8, CJmpOp); 20] = {
+    use CJmpOp::*;
+    [
+        (0b01110100, Je),
+        (0b01111100, Jl),
+        (0b01111110, Jle),
+        (0b01110010, Jb),
+        (0b01110110, Jbe),
+        (0b01111010, Jp),
+        (0b01110000, Jo),
+        (0b01111000, Js),
+        (0b01110101, Jne),
+        (0b01111101, Jnl),
+        (0b01111111, Jnle),
+        (0b01110011, Jnb),
+        (0b01110111, Jnbe),
+        (0b01111011, Jnp),
+        (0b01110001, Jno),
+        (0b01111001, Jns),
+        (0b11100010, Loop),
+        (0b11100001, Loopz),
+        (0b11100000, Loopnz),
+        (0b11100011, Jcxz),
+    ]
+};
 
 type Reg = Register;
 const W_0_REGISTERS: [Register; 8] = [
@@ -500,6 +560,11 @@ fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
         .get(field as usize)
         .map(|x| *x)
         .ok_or("missing register".to_string())
+}
+
+/// In this ISA, later-coming bytes are the hight bytes
+fn build_u16(later_byte: u8, earlier_byte: u8) -> u16 {
+    ((later_byte as u16) << 8) | (earlier_byte as u16)
 }
 
 /// [7 6 5 4 3 2 1 0]

@@ -72,3 +72,27 @@ cmp al, ah
 cmp ax, 1000
 cmp al, 226
 cmp al, 9
+jne $+2+2
+jne $+2-4
+jne $+2-6
+jne $+2-4
+je $+2-2
+jl $+2-4
+jle $+2-6
+jb $+2-8
+jbe $+2-10
+jp $+2-12
+jo $+2-14
+js $+2-16
+jne $+2-18
+jnl $+2-20
+jnle $+2-22
+jnb $+2-24
+jnbe $+2-26
+jnp $+2-28
+jno $+2-30
+jns $+2-32
+loop $+2-34
+loopz $+2-36
+loopnz $+2-38
+jcxz $+2-40
