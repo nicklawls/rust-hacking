@@ -170,12 +170,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                 Src::Ea { ea } => pp_effective_address(ea),
             };
 
-            let op_str = match op {
-                DstSrcOp::Mov => "mov",
-                DstSrcOp::Add => "add",
-                DstSrcOp::Sub => "sub",
-                DstSrcOp::Cmp => "cmp",
-            };
+            let op_str = format!("{op:?}").to_ascii_lowercase();
 
             format!("{op_str} {dst_str}, {src_str}")
         }
