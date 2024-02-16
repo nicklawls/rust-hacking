@@ -273,7 +273,7 @@ where
             // next three are opcode extension
             // next tells you if reg/rm or accumulator
             else if let (true, Ok(op)) = (
-                (byte_1 >> 6) == 0,
+                (byte_1 >> 6) == 0b00,
                 decode_opcode_extension(extract_bits_543(byte_1)),
             ) {
                 if extract_bit(byte_1, 2) {
