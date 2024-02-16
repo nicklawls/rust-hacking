@@ -158,7 +158,7 @@ pub fn pp_asm(instruction: &Instruction) -> String {
         Op::Cmp => "cmp",
     };
 
-    return format!("{op_str} {dst_str}, {src_str}");
+    format!("{op_str} {dst_str}, {src_str}")
 }
 
 pub fn decode_instruction_stream<I>(
@@ -169,7 +169,7 @@ where
 {
     let mut stream_bytes = instruction_stream.into_iter();
 
-    return std::iter::from_fn(move || {
+    std::iter::from_fn(move || {
         let next = stream_bytes.next();
         next.map(|byte_1| -> Result<Instruction, String> {
             let opcode_4 = byte_1 >> 4;
@@ -304,7 +304,7 @@ where
 
                 let op = decode_opcode_extension(opcode_extension)?;
 
-                return Ok(Instruction { op, dst, src });
+                Ok(Instruction { op, dst, src })
             } else {
                 Err(format!("Unknown opcode: {byte_1:#b}"))
             }
@@ -318,7 +318,7 @@ where
             *seen_first_error = next.is_err();
             Some(next)
         }
-    });
+    })
 }
 
 fn decode_immediate<Bytes>(w_bit: bool, stream_bytes: &mut Bytes) -> Result<Src, String>
@@ -449,7 +449,7 @@ where
             }
         }
         // register -> register
-        _ => return Err(format!("unknown field in mod: {mod_field:#b}")),
+        _ => Err(format!("unknown field in mod: {mod_field:#b}")),
     }
 }
 
@@ -496,10 +496,10 @@ const W_1_REGISTERS: [Register; 8] = [
 
 fn decode_register(field: u8, w_bit: bool) -> Result<Register, String> {
     let table = if w_bit { W_1_REGISTERS } else { W_0_REGISTERS };
-    return table
+    table
         .get(field as usize)
         .map(|x| *x)
-        .ok_or("missing register".to_string());
+        .ok_or("missing register".to_string())
 }
 
 /// [7 6 5 4 3 2 1 0]
