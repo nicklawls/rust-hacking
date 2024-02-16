@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rustbook::QueryBoxed;
+use rustbook::query_transformation::QueryBoxed;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     let data = r#"
