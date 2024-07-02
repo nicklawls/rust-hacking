@@ -20,9 +20,7 @@ const testListing = async (listingPrefix: string) => {
     throw "Bad file prefix";
   }
 
-  const asmFilename = `${listingPrefix}.asm`;
-
-  const asmFile = Bun.file(asmFilename);
+  const asmFile = Bun.file(`${listingPrefix}.asm`);
 
   if (!asmFile.exists()) {
     throw "File does not exist";
