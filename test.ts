@@ -1,6 +1,18 @@
 #!/usr/bin/env bun
 
+// Meant to be read top-to-bottom, but testListing is in a funky spot in order
+// to handle errors nicely.
+
 import { $ } from "bun";
+
+// wipe ouptput bin, output ASM, and source bin so they can't
+// influence results
+await $`fd --full-path '.out|(^[^.]+$)' listings -x rm`;
+
+$.cwd("listings");
+
+// kick off the build
+const promiseBuild = $`cargo build --bin decode`;
 
 // take in the filename of one of the hosted asm files
 const listingPrefixes = [
@@ -11,59 +23,57 @@ const listingPrefixes = [
   "listing_0041_add_sub_cmp_jnz",
 ];
 
-const buildPromise = $`cargo build --bin decode`;
-
-$.cwd("listings");
-
-const testListing = async (listingPrefix: string) => {
+// Define a function to test each prefix
+/**
+ * let `sourceBin = assemble(sourceASM)`
+ * Result resolves if `sourceBin == assemble(decode(sourceBin))`
+ */
+const testListing = async (listingPrefix: string): Promise<void> => {
   if (!listingPrefix.startsWith("listing") || listingPrefix.includes(".")) {
-    throw "Bad file prefix";
+    throw "Bad listing prefix";
   }
 
-  const asmFile = Bun.file(`${listingPrefix}.asm`);
+  const pathSourceBin = `${listingPrefix}`;
+  const pathSourceASM = `${listingPrefix}.asm`;
+  const pathOutputBin = `${listingPrefix}.out`;
+  const pathOutputASM = `${listingPrefix}.out.asm`;
 
-  if (!asmFile.exists()) {
-    throw "File does not exist";
-    // TODO: if not found, download it and save it
-  }
+  // source ASM -> source Binary
+  const promiseAssembleSource = $`nasm ${pathSourceASM}`;
 
-  // assemble it, generating the prefix-only file
-  await $`nasm ${asmFile}`;
+  // we need the decoder, so wait for the build to finish
+  await Promise.all([promiseAssembleSource, promiseBuild]);
 
-  // pass the prefix-only version into rust, pipe the output to
-  // a .out.asm file
+  // source Binary -> output ASM
+  await $`../target/debug/decode ${pathSourceBin} > ${pathOutputASM}`;
 
-  const outAsmFileName = `${listingPrefix}.out.asm`;
-
-  await buildPromise;
-
-  await $`../target/debug/decode ${listingPrefix} > ${outAsmFileName}`;
-
-  // generate a .out file by running nasm on the .out.asm
-  const reassembly = await $`nasm ${outAsmFileName}`;
-  if (reassembly.exitCode) {
+  // output ASM -> output Binary
+  const { exitCode: reassemblyExitCode } = await $`nasm ${pathOutputASM}`;
+  if (Boolean(reassemblyExitCode)) {
     throw "Failed to reassemble";
   }
 
-  // diff the .out and the suffix-less file
-  const outFileName = `${listingPrefix}.out`;
+  // diff(source Binary, output Binary) should be nada
   // TODO: better diff with diff <(xxd foo) <(xxd bar)
-  const { exitCode } = await $`diff ${listingPrefix} ${outFileName}`;
+  const { exitCode } = await $`diff ${pathSourceBin} ${pathOutputBin}`;
 
   if (exitCode === 0) {
-    return "Success!";
+    return;
   }
 
-  return { exitCode };
+  throw { exitCode };
 };
 
-const result = Object.fromEntries(
+/** Process each prefix in parallel and group the results/errors  */
+const resultsByListing = Object.fromEntries(
   await Promise.all(
     listingPrefixes.map(async (prefix) => [
       prefix,
-      await testListing(prefix).catch((e) => ({ error: e })),
-    ])
-  )
+      await testListing(prefix)
+        .then((x) => "Success!")
+        .catch((e) => ({ error: e })),
+    ]),
+  ),
 );
 
-console.log(result);
+console.log(resultsByListing);
