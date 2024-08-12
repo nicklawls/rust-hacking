@@ -4,10 +4,8 @@
 // to handle errors nicely.
 
 import { $ } from "bun";
-
-// wipe ouptput bin, output ASM, and source bin so they can't
-// influence results
-await $`fd --full-path '.out|(^[^.]+$)' listings -x rm`;
+import fs from "fs/promises";
+import path from "path";
 
 $.cwd("listings");
 
@@ -33,10 +31,21 @@ const testListing = async (listingPrefix: string): Promise<void> => {
     throw "Bad listing prefix";
   }
 
+  // Enumerate different artifacts for the given listing
   const pathSourceBin = `${listingPrefix}`;
   const pathSourceASM = `${listingPrefix}.asm`;
   const pathOutputBin = `${listingPrefix}.out`;
   const pathOutputASM = `${listingPrefix}.out.asm`;
+
+  // Delete artifacts that could invalidate the results
+  const rmArtifact = (nameArtifact: string) =>
+    fs.rm(path.join("listings", nameArtifact), { force: true });
+
+  await Promise.all([
+    rmArtifact(pathSourceBin),
+    rmArtifact(pathOutputBin),
+    rmArtifact(pathOutputASM),
+  ]);
 
   // source ASM -> source Binary
   const promiseAssembleSource = $`nasm ${pathSourceASM}`;
