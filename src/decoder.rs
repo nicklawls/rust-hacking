@@ -115,11 +115,11 @@ pub fn pp_asm(instruction: &Instruction) -> String {
                 .join(" + ");
 
             match displacement {
-                Some(disp) if *disp != 0 => {
+                Some(&disp) if disp != 0 => {
                     let sign = if disp.is_positive() { "+" } else { "-" };
-                    format!("{reg_str} {sign} {}", disp.abs())
+                    return format!("{reg_str} {sign} {}", disp.abs());
                 }
-                _ => reg_str,
+                _ => return reg_str,
             }
         }
 
